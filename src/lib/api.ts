@@ -1,5 +1,5 @@
 // API client for ExamOS with automatic mock fallback if the backend is offline
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
 
 // Simple JWT state storage in localStorage
 let cachedToken = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';

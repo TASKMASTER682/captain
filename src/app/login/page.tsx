@@ -11,11 +11,20 @@ function LoginForm() {
   const searchParams = useSearchParams();
 
   const [isSignUp, setIsSignUp] = useState(false);
+  const [authMode, setAuthMode] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+
+  // OTP / phone login (flagged feature — dev mode returns OTP in response)
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpDevHint, setOtpDevHint] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
 
   // Agency multi-select
   const [agencies, setAgencies] = useState<any[]>([]);
@@ -33,7 +42,9 @@ function LoginForm() {
 
   useEffect(() => {
     const mode = searchParams.get('mode');
+    const ref = searchParams.get('ref');
     setIsSignUp(mode === 'signup');
+    if (ref) setReferralCode(ref);
   }, [searchParams]);
 
   useEffect(() => {
@@ -68,6 +79,8 @@ function LoginForm() {
         const res = await api.post('/auth/register', {
           name, email, password,
           agencies: selectedAgencyIds.length ? selectedAgencyIds : undefined,
+          referralCode: referralCode || undefined,
+          signupSource: referralCode ? 'referral' : undefined,
         });
         setAuthToken(res.data.token || res.data.accessToken, res.data.user);
         // Show exam selection modal
@@ -131,6 +144,34 @@ function LoginForm() {
     router.push('/dashboard');
   };
 
+  const requestOtp = async () => {
+    setOtpLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/auth/otp-request', { phone });
+      setOtpSent(true);
+      setOtpDevHint(res.data?.data?.devOtp ? `Dev OTP: ${res.data.data.devOtp}` : '');
+    } catch (err: any) {
+      setError(err.message || 'Could not send OTP.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/auth/otp-login', { phone, otp });
+      setAuthToken(res.data.token || res.data.accessToken, res.data.user);
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'OTP verification failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-md p-8 rounded-3xl border border-border bg-card shadow-2xl relative max-h-[90vh] overflow-y-auto">
       <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-primary/10 blur-xl"></div>
@@ -151,7 +192,61 @@ function LoginForm() {
         <div className="p-3 mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-500 text-xs font-semibold">{error}</div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {!isSignUp && (
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-secondary/70 mb-4 text-xs font-bold">
+          <button type="button" onClick={() => setAuthMode('email')}
+            className={`py-2 rounded-lg transition-colors ${authMode === 'email' ? 'bg-card shadow text-primary' : 'text-muted-foreground'}`}>
+            Email
+          </button>
+          <button type="button" onClick={() => setAuthMode('otp')}
+            className={`py-2 rounded-lg transition-colors ${authMode === 'otp' ? 'bg-card shadow text-primary' : 'text-muted-foreground'}`}>
+            Phone / OTP
+          </button>
+        </div>
+      )}
+
+      {authMode === 'otp' && !isSignUp ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">Mobile Number</label>
+            <div className="relative">
+              <span className="text-sm text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2">+91</span>
+              <input type="tel" inputMode="numeric" maxLength={10} required placeholder="10-digit mobile number" value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all" />
+            </div>
+          </div>
+
+          {!otpSent ? (
+            <button type="button" onClick={requestOtp} disabled={otpLoading || phone.length !== 10}
+              className="w-full py-3.5 rounded-xl bg-primary text-white font-medium hover:bg-primary/95 transition-all text-sm flex items-center justify-center shadow-lg shadow-primary/25 disabled:opacity-50">
+              {otpLoading ? 'Sending...' : 'Send OTP'}
+            </button>
+          ) : (
+            <>
+              {otpDevHint && (
+                <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-600 text-xs font-semibold">
+                  {otpDevHint} <span className="text-muted-foreground font-normal">(SMS gateway not wired — dev mode)</span>
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Enter OTP</label>
+                <input type="text" inputMode="numeric" maxLength={6} required placeholder="6-digit OTP" value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm tracking-[0.4em] text-center transition-all" />
+              </div>
+              <button type="button" onClick={verifyOtp} disabled={loading || otp.length !== 6}
+                className="w-full py-3.5 rounded-xl bg-primary text-white font-medium hover:bg-primary/95 transition-all text-sm flex items-center justify-center shadow-lg shadow-primary/25 disabled:opacity-50">
+                {loading ? 'Verifying...' : 'Verify & Sign In'}
+              </button>
+              <button type="button" onClick={() => { setOtpSent(false); setOtp(''); }} className="text-xs text-muted-foreground hover:text-primary self-center">
+                Resend / change number
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {isSignUp && (
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Full Name</label>
@@ -240,7 +335,8 @@ function LoginForm() {
           className="w-full py-3.5 rounded-xl bg-primary text-white font-medium hover:bg-primary/95 transition-all text-sm flex items-center justify-center mt-4 shadow-lg shadow-primary/25 disabled:opacity-50">
           {loading ? 'Authenticating...' : isSignUp ? 'Create Account' : 'Sign In'}
         </button>
-      </form>
+        </form>
+      )}
 
       <div className="text-center mt-6 text-xs text-muted-foreground">
         {isSignUp ? (

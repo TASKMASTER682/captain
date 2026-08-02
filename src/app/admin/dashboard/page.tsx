@@ -11,7 +11,8 @@ import {
   Trash2, Edit, Search, LogOut, Sun, Moon, CheckCircle2, 
   AlertCircle, History, Filter, Building2, GraduationCap, 
   Layers, UserCog, ChevronDown, ChevronUp, RefreshCw,
-  HelpCircle
+  HelpCircle, IndianRupee, ShoppingCart, Ticket,
+  Megaphone, Activity, ClipboardList, ScrollText, CreditCard, Newspaper
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -36,10 +37,12 @@ export default function AdminDashboard() {
     totalQuestions: 0,
     activeCandidates: 0,
   });
+  const [revenueData, setRevenueData] = useState<any>(null);
 
   useEffect(() => {
     const activeUser = getAuthUser();
-    if (!activeUser || activeUser.role !== 'Super Admin') {
+    const staffRoles = ['Super Admin', 'Content Manager', 'Support'];
+    if (!activeUser || !staffRoles.includes(activeUser.role)) {
       router.push('/login');
       return;
     }
@@ -50,19 +53,21 @@ export default function AdminDashboard() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const [allQRes, qRes, stagedRes, testsRes, usersRes, subjRes] = await Promise.all([
+      const [allQRes, qRes, stagedRes, testsRes, usersRes, subjRes, revRes] = await Promise.all([
         api.get('/questions?limit=1'),
         api.get(`/questions?subject=${subject}&difficulty=${difficulty}&search=${search}`),
         api.get('/questions/staged/all').catch(() => ({ data: [] })),
         api.get('/tests').catch(() => ({ data: [] })),
         api.get('/users?role=User').catch(() => ({ data: [] })),
         api.get('/questions/subjects'),
+        api.get('/analytics/revenue').catch(() => ({ data: null })),
       ]);
 
       setQuestions(Array.isArray(qRes.data) ? qRes.data : []);
       setStagedCount(Array.isArray(stagedRes.data) ? stagedRes.data.length : 0);
       setTestsCount(Array.isArray(testsRes.data) ? testsRes.data.length : 0);
       setSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
+      setRevenueData(revRes?.data || null);
 
       const users = Array.isArray(usersRes.data) ? usersRes.data : [];
       const candidates = users.filter((u: any) => u.active !== false).length;
@@ -218,6 +223,39 @@ export default function AdminDashboard() {
               <span className="text-[11px] text-muted-foreground font-medium block">Active Candidates</span>
               <span className="text-xl font-bold font-outfit text-amber-500">{stats.activeCandidates}</span>
             </div>
+          </div>
+          <Link href="/admin/revenue" className="p-5 rounded-2xl border border-emerald-500/20 bg-card shadow-sm flex items-center gap-4 hover:border-emerald-500/40 transition-all group">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+              <IndianRupee className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[11px] text-muted-foreground font-medium block">Total Revenue</span>
+              <span className="text-xl font-bold font-outfit text-emerald-500">₹{(revenueData?.totalRevenue || 0).toLocaleString()}</span>
+            </div>
+          </Link>
+        </div>
+
+        <div>
+          <h2 className="text-base font-bold font-outfit mb-4 flex items-center gap-2"><IndianRupee className="w-4 h-4 text-emerald-500" /> Business Modules</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { href: '/admin/revenue', icon: IndianRupee, label: 'Revenue Dashboard', color: 'text-emerald-500 bg-emerald-500/10' },
+              { href: '/admin/engagement', icon: Activity, label: 'Engagement', color: 'text-violet-500 bg-violet-500/10' },
+              { href: '/admin/orders', icon: ShoppingCart, label: 'Orders', color: 'text-cyan-500 bg-cyan-500/10' },
+              { href: '/admin/coupons', icon: Ticket, label: 'Coupons', color: 'text-pink-500 bg-pink-500/10' },
+              { href: '/admin/announcements', icon: Megaphone, label: 'Announcements', color: 'text-sky-500 bg-sky-500/10' },
+              { href: '/admin/razorpay', icon: CreditCard, label: 'Razorpay Settings', color: 'text-rose-500 bg-rose-500/10' },
+              { href: '/admin/attempts', icon: ClipboardList, label: 'Student Attempts', color: 'text-violet-500 bg-violet-500/10' },
+              { href: '/admin/audit-logs', icon: ScrollText, label: 'Audit Logs', color: 'text-indigo-500 bg-indigo-500/10' },
+              { href: '/admin/materials', icon: FileText, label: 'Study Materials', color: 'text-emerald-500 bg-emerald-500/10' },
+              { href: '/admin/doubts', icon: HelpCircle, label: 'Doubts Forum', color: 'text-amber-500 bg-amber-500/10' },
+              { href: '/admin/blogs', icon: Newspaper, label: 'Blogs', color: 'text-sky-500 bg-sky-500/10' },
+            ].map(m => (
+              <Link key={m.href} href={m.href} className="p-4 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-3 hover:border-primary/30 transition-all group">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${m.color} group-hover:scale-105 transition-transform`}><m.icon className="w-4 h-4" /></div>
+                <span className="text-xs font-semibold leading-tight">{m.label}</span>
+              </Link>
+            ))}
           </div>
         </div>
 

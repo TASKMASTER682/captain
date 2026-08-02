@@ -1,0 +1,411 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { api, getAuthUser, clearAuth } from '@/lib/api';
+import {
+  Check, ArrowLeft, ShoppingCart, Ticket, Copy, CheckCircle2,
+  Lock, Sparkles, RefreshCw, Loader2, Gift, IndianRupee, CreditCard, X
+} from 'lucide-react';
+
+// Razorpay checkout script loader
+  const loadRazorpay = () => {
+    return new Promise<{ new (options: any): any }>((resolve) => {
+      if ((window as any).Razorpay) return resolve((window as any).Razorpay);
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve((window as any).Razorpay);
+      script.onerror = () => resolve(null as any);
+      document.body.appendChild(script);
+    });
+  };
+
+export default function PlansPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [testSeries, setTestSeries] = useState<any[]>([]);
+  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [referral, setReferral] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [checkoutItem, setCheckoutItem] = useState<any>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponInfo, setCouponInfo] = useState<any>(null);
+  const [couponError, setCouponError] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [orderError, setOrderError] = useState('');
+
+  useEffect(() => {
+    const activeUser = getAuthUser();
+    if (!activeUser) { router.push('/login'); return; }
+    setUser(activeUser);
+    loadData();
+  }, [router]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [plansRes, seriesRes, ordersRes, refRes] = await Promise.all([
+        api.get('/plans').catch(() => ({ data: [] })),
+        api.get('/test-series').catch(() => ({ data: [] })),
+        api.get('/orders/my-orders').catch(() => ({ data: [] })),
+        api.get('/auth/referral').catch(() => ({ data: null })),
+      ]);
+      setPlans(Array.isArray(plansRes.data) ? plansRes.data : []);
+      // Only show paid test series on the plans page
+      const allSeries = Array.isArray(seriesRes.data) ? seriesRes.data : [];
+      setTestSeries(allSeries.filter((s: any) => s.price > 0));
+      setMyOrders(Array.isArray(ordersRes.data) ? ordersRes.data : []);
+      setReferral(refRes?.data || null);
+    } catch (err) { console.error(err); }
+    setLoading(false);
+  };
+
+  const openCheckout = (item: any) => {
+    setCheckoutItem(item);
+    setCouponCode('');
+    setCouponInfo(null);
+    setCouponError('');
+    setOrderError('');
+  };
+
+  const closeCheckout = () => {
+    setCheckoutItem(null);
+    setProcessing(false);
+  };
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim() || !checkoutItem) return;
+    setCouponError('');
+    try {
+      const res = await api.post('/coupons/validate', {
+        code: couponCode,
+        amount: checkoutItem.price,
+      });
+      setCouponInfo(res.data);
+    } catch (err: any) {
+      setCouponInfo(null);
+      setCouponError(err.message || 'Invalid coupon');
+    }
+  };
+
+  const discount = couponInfo?.discount || 0;
+  const payable = Math.max(0, (checkoutItem?.price || 0) - discount);
+
+  const handleCheckout = async () => {
+    if (!checkoutItem || processing) return;
+    setProcessing(true);
+    setOrderError('');
+    try {
+      const res = await api.post('/orders/checkout', {
+        type: checkoutItem.type,
+        ...(checkoutItem.type === 'plan' ? { planId: checkoutItem._id } : { testSeriesId: checkoutItem._id }),
+        couponCode: couponInfo?.code || undefined,
+      });
+      const data = res.data;
+
+      // Offline mode (no Razorpay keys configured) — auto-verify
+      if (data.mode === 'offline' || !data.razorpayOrderId) {
+        const verify = await api.post('/orders/verify', {
+          orderId: data.orderId,
+          mode: 'offline',
+        });
+        await loadData();
+        setProcessing(false);
+        setCheckoutItem(null);
+        alert('Payment recorded successfully. Access unlocked! 🎉');
+        return;
+      }
+
+      // Real Razorpay flow
+      const Razorpay = await loadRazorpay();
+      if (!Razorpay) {
+        setOrderError('Payment gateway could not load. Please try again.');
+        setProcessing(false);
+        return;
+      }
+
+      const rzp = new Razorpay({
+        key_id: data.keyId,
+        amount: data.amount * 100,
+        currency: data.currency,
+        name: 'ExamOS',
+        description: `Order #${data.orderId}`,
+        order_id: data.razorpayOrderId,
+        handler: async (response: any) => {
+          try {
+            await api.post('/orders/verify', {
+              orderId: data.orderId,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              mode: 'razorpay',
+            });
+            await loadData();
+            setCheckoutItem(null);
+            alert('Payment successful! Access unlocked. 🎉');
+          } catch (err: any) {
+            setOrderError(err.message || 'Payment verification failed.');
+          }
+          setProcessing(false);
+        },
+        modal: {
+          ondismiss: () => setProcessing(false),
+        },
+        prefill: {
+          name: user?.name,
+          email: user?.email,
+        },
+        theme: { color: '#6366f1' },
+      });
+      rzp.open();
+    } catch (err: any) {
+      setOrderError(err.message || 'Checkout failed.');
+      setProcessing(false);
+    }
+  };
+
+  const copyReferral = () => {
+    if (!referral?.link) return;
+    navigator.clipboard.writeText(referral.link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleLogout = () => {
+    clearAuth();
+    router.push('/');
+  };
+
+  const cycleLabel: any = { monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly', lifetime: 'Lifetime' };
+  const orderBadge = (s: string) => ({
+    paid: 'bg-emerald-500/10 text-emerald-500',
+    pending: 'bg-amber-500/10 text-amber-500',
+    failed: 'bg-rose-500/10 text-rose-500',
+    refunded: 'bg-slate-500/10 text-slate-400',
+  }[s] || 'bg-secondary text-muted-foreground');
+
+  const hasActivePlan = user?.subscription?.status === 'active';
+
+  if (!user) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary"></div></div>;
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
+      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
+          <ShoppingCart className="w-5 h-5 text-emerald-500" />
+          <h1 className="font-bold text-lg font-outfit">Test Series</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={loadData} className="p-2.5 rounded-xl bg-secondary hover:bg-secondary/80" title="Refresh"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+          <button onClick={handleLogout} className="px-4 py-2 rounded-xl border border-border bg-card text-rose-500 hover:bg-rose-500/10 text-xs font-bold">Logout</button>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8 flex flex-col gap-8">
+        {loading ? (
+          <div className="text-center py-16 text-muted-foreground">Loading...</div>
+        ) : (
+          <>
+            {/* Referral Banner */}
+            {referral?.code && (
+              <div className="p-5 rounded-3xl border border-violet-500/20 bg-gradient-to-br from-card to-violet-500/5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0"><Gift className="w-5 h-5" /></div>
+                  <div>
+                    <h3 className="font-bold text-sm font-outfit flex items-center gap-2">Invite Friends, Earn Rewards <Sparkles className="w-3.5 h-3.5 text-violet-500" /></h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">You've referred <strong>{referral.referralCount}</strong> friend{referral.referralCount !== 1 ? 's' : ''} and earned <strong className="text-emerald-500">₹{referral.rewardAmount}</strong>. Share your code — every paid signup earns you 10%.</p>
+                    <button onClick={copyReferral} className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-colors">
+                      {copied ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? 'Copied!' : 'Copy Referral Link'}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-center sm:text-right">
+                  <div className="font-mono text-sm font-bold px-3 py-1.5 rounded-lg bg-violet-500/10 text-violet-500 border border-violet-500/20 tracking-wider">{referral.code}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Active subscription status */}
+            {hasActivePlan && (
+              <div className="p-5 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                <div className="text-sm">
+                  <span className="font-bold text-emerald-600">Premium Active</span>
+                  {user.subscription.expiresAt && <span className="text-muted-foreground text-xs"> · Valid till {new Date(user.subscription.expiresAt).toLocaleDateString()}</span>}
+                </div>
+              </div>
+            )}
+
+            {/* Subscription Plans - Hidden for now (future feature) */}
+            {/* <div>
+              <h2 className="text-xl font-bold font-outfit mb-4 flex items-center gap-2"><Crown className="w-5 h-5 text-amber-500" /> Subscription Plans</h2>
+              {plans.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No subscription plans available yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {plans.map((p: any) => {
+                    const isCurrent = user?.subscription?.planId === p._id && hasActivePlan;
+                    return (
+                      <div key={p._id} className={`p-6 rounded-3xl border bg-card flex flex-col gap-4 transition-all ${p.popular ? 'border-amber-500/40 ring-2 ring-amber-500/10 shadow-lg' : 'border-border hover:border-primary/30'}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold font-outfit">{p.name}</span>
+                          {p.popular && <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[10px] font-bold">POPULAR</span>}
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black font-outfit">₹{p.price}</span>
+                          <span className="text-xs text-muted-foreground">/ {cycleLabel[p.billingCycle] || p.billingCycle}</span>
+                        </div>
+                        {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
+                        <div className="flex flex-col gap-1.5">
+                          {(p.features || []).map((f: string, i: number) => (
+                            <span key={i} className="text-xs flex items-center gap-1.5"><span className="text-emerald-500"><Check className="w-3 h-3" /></span>{f}</span>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => isCurrent ? null : openCheckout({ ...p, type: 'plan' })}
+                          disabled={isCurrent}
+                          className={`w-full py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${isCurrent ? 'bg-emerald-500/10 text-emerald-500 cursor-default' : p.popular ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md shadow-amber-600/20' : 'bg-primary text-white hover:bg-primary/95'}`}
+                        >
+                          {isCurrent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Current Plan</> : <><Crown className="w-3.5 h-3.5" /> Subscribe</>}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div> */}
+
+            {/* Paid Test Series (Bundles) */}
+            <div>
+              <h2 className="text-xl font-bold font-outfit mb-4 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-emerald-500" /> Premium Test Series</h2>
+              {testSeries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No paid test series available yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {testSeries.map((s: any) => {
+                    const owned = myOrders.some((o: any) => o.type === 'test_series' && o.testSeries?._id === s._id && o.status === 'paid');
+                    return (
+                      <div key={s._id} className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-3 hover:border-emerald-500/30 transition-all">
+                        {s.banner && <img src={s.banner} alt={s.title} className="w-full h-28 object-cover rounded-xl" />}
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold font-outfit">{s.title}</span>
+                          {owned && <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold flex items-center gap-1"><Check className="w-3 h-3" /> Owned</span>}
+                        </div>
+                        {s.examId?.name && <span className="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-500 w-fit">{s.examId.name}</span>}
+                        {s.description && <p className="text-xs text-muted-foreground line-clamp-2">{s.description}</p>}
+                        <div className="flex items-center gap-2 mt-auto">
+                          <span className="text-xl font-black font-outfit text-emerald-600">₹{s.price}</span>
+                          <button
+                            onClick={() => owned ? null : openCheckout({ ...s, type: 'test_series' })}
+                            disabled={owned}
+                            className={`ml-auto px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${owned ? 'bg-emerald-500/10 text-emerald-500 cursor-default' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                          >
+                            {owned ? <><CheckCircle2 className="w-3.5 h-3.5" /> Purchased</> : <><Lock className="w-3.5 h-3.5" /> Buy Full Series</>}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Order History */}
+            <div>
+              <h2 className="text-xl font-bold font-outfit mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-indigo-500" /> My Orders</h2>
+              {myOrders.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No orders yet.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {myOrders.map((o: any) => (
+                    <div key={o._id} className="p-4 rounded-2xl border border-border bg-card flex items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{o.plan?.name || o.testSeries?.title || o.type}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${orderBadge(o.status)}`}>{o.status}</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                          {new Date(o.createdAt).toLocaleString()}{o.couponCode ? ` · Coupon ${o.couponCode} (-₹${o.discount})` : ''}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-black font-outfit">₹{o.amount}</div>
+                        {o.subtotal > o.amount && <div className="text-[10px] text-muted-foreground line-through">₹{o.subtotal}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </main>
+
+      {/* Checkout Modal */}
+      {checkoutItem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold font-outfit flex items-center gap-2">
+                <Lock className="w-5 h-5 text-primary" /> Checkout
+              </h3>
+              <button onClick={closeCheckout} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-border bg-muted/20">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold">{checkoutItem.name || checkoutItem.title}</span>
+                {checkoutItem.type === 'plan' ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 font-bold">{cycleLabel[checkoutItem.billingCycle]}</span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold">Test Series</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <IndianRupee className="w-4 h-4 text-muted-foreground" />
+                <span className="text-2xl font-black font-outfit">₹{checkoutItem.price}</span>
+              </div>
+            </div>
+
+            {/* Coupon */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1"><Ticket className="w-3.5 h-3.5" /> Coupon Code</label>
+              <div className="flex gap-2">
+                <input
+                  type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="Enter coupon" className="flex-1 px-4 py-3 rounded-xl border border-border bg-background text-sm font-bold tracking-wider uppercase"
+                />
+                <button onClick={applyCoupon} className="px-4 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95">Apply</button>
+              </div>
+              {couponInfo && <p className="text-[11px] text-emerald-500 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {couponInfo.code} applied — you save ₹{couponInfo.discount}</p>}
+              {couponError && <p className="text-[11px] text-rose-500 font-semibold">{couponError}</p>}
+            </div>
+
+            <div className="flex flex-col gap-1.5 border-t border-border pt-4 text-sm">
+              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{checkoutItem.price}</span></div>
+              {discount > 0 && <div className="flex justify-between text-emerald-500"><span>Discount</span><span>-₹{discount}</span></div>}
+              <div className="flex justify-between font-bold text-lg"><span>Total</span><span>₹{payable}</span></div>
+            </div>
+
+            {orderError && <p className="text-xs text-rose-500 font-semibold p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">{orderError}</p>}
+
+            <button
+              onClick={handleCheckout}
+              disabled={processing}
+              className="w-full py-3.5 rounded-xl bg-primary text-white font-bold hover:bg-primary/95 text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Lock className="w-4 h-4" /> Pay ₹{payable} Securely</>}
+            </button>
+            <p className="text-[10px] text-muted-foreground text-center">Payments processed securely via Razorpay</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

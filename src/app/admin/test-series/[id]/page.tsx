@@ -35,6 +35,9 @@ export default function TestSeriesDetail() {
   const [fullscreenRequired, setFullscreenRequired] = useState(true);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
+  const [scheduled, setScheduled] = useState(false);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [sections, setSections] = useState<any[]>([
     { name: 'Section 1', duration: 0, negativeMarking: true, marksPerQuestion: 2, negativeMarksPerQuestion: 0.5, questionIds: [] }
   ]);
@@ -119,6 +122,7 @@ export default function TestSeriesDetail() {
     setTitle(''); setDuration(60); setPassingMarks(40); setPassingMode('manual'); setAttemptLimit(1);
     setCalculatorAllowed(false); setFullscreenRequired(true);
     setShuffleQuestions(true); setShuffleOptions(true);
+    setScheduled(false); setStartTime(''); setEndTime('');
     setSections([{ name: 'Section 1', duration: 0, negativeMarking: true, marksPerQuestion: 2, negativeMarksPerQuestion: 0.5, questionIds: [] }]);
     setQuestionPaste('');
     setQuestionMode('paste');
@@ -132,6 +136,9 @@ export default function TestSeriesDetail() {
     setAttemptLimit(t.attemptLimit);
     setCalculatorAllowed(t.calculatorAllowed); setFullscreenRequired(t.fullscreenRequired);
     setShuffleQuestions(t.shuffleQuestions); setShuffleOptions(t.shuffleOptions);
+    setScheduled(!!t.scheduled);
+    setStartTime(t.startTime ? new Date(t.startTime).toISOString().slice(0, 16) : '');
+    setEndTime(t.endTime ? new Date(t.endTime).toISOString().slice(0, 16) : '');
     setSections(t.sections?.map((s: any) => ({
       name: s.name, duration: s.duration || 0,
       negativeMarking: s.negativeMarking,
@@ -287,6 +294,8 @@ export default function TestSeriesDetail() {
         examId: testSeries?.examId?._id || testSeries?.examId,
         title, duration, passingMarks, passingMode, attemptLimit,
         calculatorAllowed, fullscreenRequired, shuffleQuestions, shuffleOptions,
+        scheduled, startTime: scheduled && startTime ? new Date(startTime).toISOString() : null,
+        endTime: scheduled && endTime ? new Date(endTime).toISOString() : null,
         sections: finalSections.map(s => ({
           name: s.name, duration: s.duration,
           negativeMarking: s.negativeMarking,
@@ -372,6 +381,11 @@ export default function TestSeriesDetail() {
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-bold">{t.title}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${t.status === 'Published' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>{t.status}</span>
+                      {t.scheduled && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-500/10 text-violet-500">
+                          Scheduled {t.startTime ? `· ${new Date(t.startTime).toLocaleString()}` : ''}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{t.duration} min</span>
@@ -501,6 +515,28 @@ export default function TestSeriesDetail() {
                   <input type="checkbox" checked={shuffleOptions} onChange={e => setShuffleOptions(e.target.checked)} className="rounded border-border text-primary" />
                 </label>
               </div>
+            </div>
+
+            {/* Scheduling */}
+            <div className="p-5 rounded-2xl border border-border bg-background">
+              <h4 className="text-sm font-bold font-outfit flex items-center gap-2 mb-3"><Clock className="w-4 h-4 text-emerald-500" /> Schedule (Live / Fixed-Slot Test)</h4>
+              <label className="flex items-center justify-between p-3 rounded-xl border border-border bg-card cursor-pointer text-xs font-semibold mb-3">
+                <span>Enable fixed-slot scheduling</span>
+                <input type="checkbox" checked={scheduled} onChange={e => setScheduled(e.target.checked)} className="rounded border-border text-primary" />
+              </label>
+              {scheduled && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-muted-foreground">Opens At</label>
+                    <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} className="px-4 py-3 rounded-xl border border-border bg-card text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-muted-foreground">Closes At</label>
+                    <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="px-4 py-3 rounded-xl border border-border bg-card text-sm" />
+                  </div>
+                </div>
+              )}
+              {scheduled && !startTime && <p className="text-[10px] text-amber-500 mt-2">Students can only start within the window. Leave "Closes At" empty for no end limit.</p>}
             </div>
 
             {/* Sections */}

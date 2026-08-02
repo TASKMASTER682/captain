@@ -1,5 +1,6 @@
 // API client for ExamOS — always talks to the real backend.
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+export { API_BASE };
 
 // Simple JWT state storage in localStorage
 let cachedToken = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';

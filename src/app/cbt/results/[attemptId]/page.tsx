@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { 
   Award, BarChart2, CheckCircle2, ChevronRight, HelpCircle, 
   RefreshCw, TrendingUp, AlertTriangle, ArrowLeft, Lightbulb,
-  Layers, Target
+  Layers, Target, Trophy, Crown, Medal
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -20,12 +20,22 @@ export default function AttemptResults() {
   const [loading, setLoading] = useState(true);
   const [telemetryTab, setTelemetryTab] = useState<'all' | 'wrong'>('all');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [toppers, setToppers] = useState<any[]>([]);
+  const [myEntry, setMyEntry] = useState<any>(null);
 
   useEffect(() => {
     const loadResults = async () => {
       try {
         const res = await api.get(`/attempts/${attemptId}/results`);
         setData(res.data);
+        const testId = res.data?.attempt?.testId?._id;
+        if (testId) {
+          try {
+            const lb = await api.get(`/leaderboard/test/${testId}?limit=5`);
+            setToppers(lb.data?.entries || []);
+            setMyEntry(lb.data?.myEntry || null);
+          } catch (_) { /* leaderboard optional */ }
+        }
         setLoading(false);
       } catch (err) {
         console.error('Failed to load attempt results', err);
@@ -102,6 +112,63 @@ export default function AttemptResults() {
             <span className={`text-xs font-semibold ${analytics.examReadinessScore >= 70 ? 'text-emerald-500/80' : 'text-amber-500/80'}`}>
               {analytics.examReadinessScore >= 70 ? 'Ready for actual exam' : 'Needs improvement'}
             </span>
+          </div>
+        </div>
+
+        {/* Toppers / Leaderboard Section */}
+        <div className="p-8 rounded-3xl border border-border bg-card flex flex-col gap-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold font-outfit flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-amber-500" /> Toppers
+            </h3>
+            {test._id && (
+              <Link href={`/leaderboard?testId=${test._id}`} className="text-xs font-bold text-primary hover:underline flex items-center gap-1">
+                Full Leaderboard <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* My standing */}
+            {myEntry && (
+              <div className="p-5 rounded-2xl border border-primary/30 bg-primary/5 flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+                  <Crown className="w-3.5 h-3.5" /> Your Standing
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black font-outfit text-primary">#{myEntry.rank}</span>
+                  <span className="text-xs text-muted-foreground">of this test's candidates</span>
+                </div>
+                <div className="flex gap-4 text-xs text-muted-foreground">
+                  <span>Score: <b className="text-foreground">{myEntry.score}</b></span>
+                  <span>Percentile: <b className="text-foreground">{myEntry.percentile}%ile</b></span>
+                </div>
+              </div>
+            )}
+
+            {/* Top 5 toppers */}
+            <div className="flex flex-col gap-2">
+              {toppers.length === 0 ? (
+                <div className="text-xs text-muted-foreground flex items-center gap-2 h-full justify-center">
+                  <Medal className="w-4 h-4 opacity-50" /> No submissions yet — be the first to top this test.
+                </div>
+              ) : (
+                toppers.map((t: any, i: number) => {
+                  const medalColors = ['text-amber-500', 'text-slate-400', 'text-orange-600'];
+                  return (
+                    <div key={t.attemptId} className={`flex items-center gap-3 p-3 rounded-xl border text-xs ${i === 0 ? 'border-amber-500/40 bg-amber-500/5' : 'border-border bg-background/50'}`}>
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-black font-mono ${i === 0 ? 'bg-amber-500 text-white' : i === 1 ? 'bg-slate-400 text-white' : i === 2 ? 'bg-orange-600 text-white' : 'bg-secondary text-muted-foreground'}`}>{i + 1}</span>
+                      <span className={`font-bold truncate ${t.rank === myEntry?.rank ? 'text-primary' : ''}`}>{t.studentName}</span>
+                      {t.rank === myEntry?.rank && <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[9px] font-bold">YOU</span>}
+                      <div className="ml-auto flex items-center gap-3 text-muted-foreground">
+                        <span>{t.score} pts</span>
+                        <span className="font-mono font-bold text-foreground">{Math.round(t.accuracy)}%</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
 

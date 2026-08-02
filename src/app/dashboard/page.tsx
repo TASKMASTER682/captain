@@ -1,16 +1,18 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, clearAuth, getAuthUser } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { 
   Flame, Calendar, BookOpen, Clock, BrainCircuit, BarChart3,
   Play, ClipboardList, LogOut, Sun, Moon, Sparkles, BookMarked,
   Target, Zap, AlertCircle, RotateCcw,
   Building2, GraduationCap, Settings, Search, Loader2, CheckCircle, PlusCircle, XCircle, TrendingUp, AlertTriangle,
-  Star, UserCheck, Users, CreditCard
+  Star, UserCheck, Users, CreditCard, Lock, Megaphone, IndianRupee, Ticket, Copy, CheckCircle2, Crown, X,
+  FolderOpen, Trophy, Receipt, User, HelpCircle, Newspaper
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -77,11 +79,81 @@ export default function StudentDashboard() {
   const [recs, setRecs] = useState<any[]>([]);
   const [weakAreas, setWeakAreas] = useState<any[]>([]);
   const [dailyStats, setDailyStats] = useState<any>({ streak: 0, questionsToday: 0, timeSpentToday: 0, scoreAvg: 0 });
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [gamification, setGamification] = useState<any>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userAgencies, setUserAgencies] = useState<any[]>([]);
   const [userExams, setUserExams] = useState<any[]>([]);
+
+  // Checkout modal state (for paid test series)
+  const [checkoutItem, setCheckoutItem] = useState<any>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponInfo, setCouponInfo] = useState<any>(null);
+  const [couponError, setCouponError] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [orderError, setOrderError] = useState('');
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const activeUser = getAuthUser();
+    if (!activeUser) return;
+    try {
+      const userAgencyIds = activeUser?.agencies || [];
+      const userExamIds = activeUser?.exams || [];
+
+      const [tsRes, enrolledRes, histRes, recRes, weakRes, dailyRes, trendRes, gamRes, subjRes, allAgenciesRes, allExamsRes, bookmarkRes, annRes] = await Promise.all([
+        api.get('/test-series').catch(() => ({ data: [] })),
+        api.get('/enrollments/me').catch(() => ({ data: [] })),
+        api.get('/attempts/history').catch(() => ({ data: [] })),
+        api.get('/practice/recommendations').catch(() => ({ data: [] })),
+        api.get('/my-analytics/weak-areas').catch(() => ({ data: [] })),
+        api.get('/my-analytics/daily-stats').catch(() => ({ data: null })),
+        api.get('/my-analytics/trends?months=6').catch(() => ({ data: [] })),
+        api.get('/my-analytics/gamification').catch(() => ({ data: null })),
+        api.get('/questions/subjects').catch(() => ({ data: [] })),
+        api.get('/agencies').catch(() => ({ data: [] })),
+        api.get('/exams').catch(() => ({ data: [] })),
+        api.get('/bookmarks').catch(() => ({ data: [] })),
+        api.get('/announcements/active').catch(() => ({ data: [] })),
+      ]);
+      setAnnouncements(Array.isArray(annRes.data) ? annRes.data : []);
+
+      const agencies = Array.isArray(allAgenciesRes.data) ? allAgenciesRes.data : [];
+      const exams = Array.isArray(allExamsRes.data) ? allExamsRes.data : [];
+      setUserAgencies(agencies.filter((a: any) => userAgencyIds.includes(a._id)));
+      setUserExams(exams.filter((e: any) => userExamIds.includes(e._id)));
+
+      const allSeries = Array.isArray(tsRes.data) ? tsRes.data : [];
+      setAllTestSeries(allSeries);
+
+      const enrolledTs = Array.isArray(enrolledRes.data) ? enrolledRes.data : [];
+      const enrolledTsIds: Set<string> = new Set(enrolledTs.map((e: any) => e.testSeriesId?._id || e.testSeriesId).filter(Boolean));
+      const enrolledTsObjects = enrolledTs
+        .map((e: any) => e.testSeriesId)
+        .filter((ts: any) => ts);
+      setEnrolledIds(enrolledTsIds);
+      setEnrolledSeries(enrolledTsObjects);
+
+      const historyData = Array.isArray(histRes.data) ? histRes.data : [];
+      setHistory(historyData);
+
+      const recData = Array.isArray(recRes.data) ? recRes.data : [];
+      setRecs(recData);
+
+      const weakData = Array.isArray(weakRes.data) ? weakRes.data : [];
+      setWeakAreas(weakData);
+
+      setDailyStats(dailyRes.data || { streak: 0, questionsToday: 0, timeSpentToday: 0, scoreAvg: 0 });
+      setTrendData(Array.isArray(trendRes.data) ? trendRes.data : []);
+      setGamification(gamRes.data || null);
+      setSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
+      setBookmarks(Array.isArray(bookmarkRes.data) ? bookmarkRes.data : []);
+    } catch (err) { console.error(err); }
+    setLoading(false);
+  }, []);
 
   // Elastic search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -107,63 +179,8 @@ export default function StudentDashboard() {
       return;
     }
     setUser(activeUser);
-
-    const loadData = async () => {
-      try {
-        const userAgencyIds = activeUser?.agencies || [];
-        const userExamIds = activeUser?.exams || [];
-
-        const [tsRes, enrolledRes, histRes, recRes, weakRes, dailyRes, subjRes, allAgenciesRes, allExamsRes, bookmarkRes] = await Promise.all([
-          api.get('/test-series').catch(() => ({ data: [] })),
-          api.get('/enrollments/me').catch(() => ({ data: [] })),
-          api.get('/attempts/history').catch(() => ({ data: [] })),
-          api.get('/practice/recommendations').catch(() => ({ data: [] })),
-          api.get('/analytics/weak-areas').catch(() => ({ data: [] })),
-          api.get('/analytics/daily-stats').catch(() => ({ data: null })),
-          api.get('/questions/subjects').catch(() => ({ data: [] })),
-          api.get('/agencies').catch(() => ({ data: [] })),
-          api.get('/exams').catch(() => ({ data: [] })),
-          api.get('/bookmarks').catch(() => ({ data: [] })),
-        ]);
-
-        const agencies = Array.isArray(allAgenciesRes.data) ? allAgenciesRes.data : [];
-        const exams = Array.isArray(allExamsRes.data) ? allExamsRes.data : [];
-        setUserAgencies(agencies.filter((a: any) => userAgencyIds.includes(a._id)));
-        setUserExams(exams.filter((e: any) => userExamIds.includes(e._id)));
-
-        // Load all test series
-        const allSeries = Array.isArray(tsRes.data) ? tsRes.data : [];
-        setAllTestSeries(allSeries);
-
-        // Load enrolled test series
-        const enrolledData = Array.isArray(enrolledRes.data) ? enrolledRes.data : [];
-        const enrolledTsIds = new Set<string>();
-        const enrolledTsObjects: any[] = [];
-        enrolledData.forEach((enr: any) => {
-          if (enr.testSeriesId && enr.testSeriesId._id) {
-            enrolledTsIds.add(enr.testSeriesId._id);
-            enrolledTsObjects.push(enr.testSeriesId);
-          }
-        });
-        setEnrolledIds(enrolledTsIds);
-        setEnrolledSeries(enrolledTsObjects);
-
-        setHistory(Array.isArray(histRes.data) ? histRes.data : []);
-        setRecs(Array.isArray(recRes.data) ? recRes.data : []);
-        setWeakAreas(Array.isArray(weakRes.data) ? weakRes.data : []);
-        const ds = dailyRes?.data;
-        setDailyStats(ds && typeof ds.streak === 'number' ? ds : { streak: 0, questionsToday: 0, timeSpentToday: 0, scoreAvg: 0 });
-        setSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
-        setBookmarks(Array.isArray(bookmarkRes.data) ? bookmarkRes.data : []);
-      } catch (err) {
-        console.error('Failed to load dashboard data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadData();
-  }, [router]);
+  }, [router, loadData]);
 
   // Elastic search with debounce
   useEffect(() => {
@@ -191,18 +208,142 @@ export default function StudentDashboard() {
     router.push('/');
   };
 
+  const openCheckout = (item: any) => {
+    setCheckoutItem(item);
+    setCouponCode('');
+    setCouponInfo(null);
+    setCouponError('');
+    setOrderError('');
+  };
+
+  const closeCheckout = () => {
+    setCheckoutItem(null);
+    setProcessing(false);
+  };
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim() || !checkoutItem) return;
+    setCouponError('');
+    try {
+      const res = await api.post('/coupons/validate', {
+        code: couponCode,
+        amount: checkoutItem.price,
+      });
+      setCouponInfo(res.data);
+    } catch (err: any) {
+      setCouponInfo(null);
+      setCouponError(err.message || 'Invalid coupon');
+    }
+  };
+
+  const discount = couponInfo?.discount || 0;
+  const payable = Math.max(0, (checkoutItem?.price || 0) - discount);
+
+  const handleCheckout = async () => {
+    if (!checkoutItem || processing) return;
+    setProcessing(true);
+    setOrderError('');
+    try {
+      const res = await api.post('/orders/checkout', {
+        type: checkoutItem.type,
+        ...(checkoutItem.type === 'plan' ? { planId: checkoutItem._id } : { testSeriesId: checkoutItem._id }),
+        couponCode: couponInfo?.code || undefined,
+      });
+      const data = res.data;
+
+      // Offline mode (no Razorpay keys configured) — auto-verify
+      if (data.mode === 'offline' || !data.razorpayOrderId) {
+        const verify = await api.post('/orders/verify', {
+          orderId: data.orderId,
+          mode: 'offline',
+        });
+        await loadData();
+        setProcessing(false);
+        setCheckoutItem(null);
+        alert('Payment recorded successfully. Access unlocked! 🎉');
+        return;
+      }
+
+      // Real Razorpay flow
+      const Razorpay = await loadRazorpay();
+      if (!Razorpay) {
+        setOrderError('Payment gateway could not load. Please try again.');
+        setProcessing(false);
+        return;
+      }
+
+      const rzp = new Razorpay({
+        key_id: data.keyId,
+        amount: data.amount * 100,
+        currency: data.currency,
+        name: 'ExamOS',
+        description: `Order #${data.orderId}`,
+        order_id: data.razorpayOrderId,
+        handler: async (response: any) => {
+          try {
+            await api.post('/orders/verify', {
+              orderId: data.orderId,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              mode: 'razorpay',
+            });
+            await loadData();
+            setCheckoutItem(null);
+            alert('Payment successful! Access unlocked. 🎉');
+          } catch (err: any) {
+            setOrderError(err.message || 'Payment verification failed.');
+          }
+          setProcessing(false);
+        },
+        modal: {
+          ondismiss: () => setProcessing(false),
+        },
+        prefill: {
+          name: user?.name,
+          email: user?.email,
+        },
+        theme: { color: '#6366f1' },
+      });
+      rzp.open();
+    } catch (err: any) {
+      setOrderError(err.message || 'Checkout failed.');
+      setProcessing(false);
+    }
+  };
+
+  // Razorpay checkout script loader
+  const loadRazorpay = () => {
+    return new Promise<{ new (options: any): any }>((resolve) => {
+      if ((window as any).Razorpay) return resolve((window as any).Razorpay);
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve((window as any).Razorpay);
+      script.onerror = () => resolve(null as any);
+      document.body.appendChild(script);
+    });
+  };
+
   const toggleEnroll = async (seriesId: string, currentlyEnrolled: boolean) => {
     if (enrolling.has(seriesId)) return;
+    const ts = allTestSeries.find((t: any) => t._id === seriesId);
+    const isPaid = ts?.price > 0;
+    
+    // If paid test series and not enrolled, open checkout instead of direct enroll
+    if (!currentlyEnrolled && isPaid) {
+      openCheckout({ ...ts, type: 'test_series' });
+      return;
+    }
+    
     setEnrolling(prev => new Set(prev).add(seriesId));
     try {
       if (currentlyEnrolled) {
         await api.delete(`/enrollments/unenroll/${seriesId}`);
         setEnrolledIds(prev => { const n = new Set(prev); n.delete(seriesId); return n; });
-        setEnrolledSeries(prev => prev.filter((ts: any) => ts._id !== seriesId));
+        setEnrolledSeries(prev => prev.filter((t: any) => t._id !== seriesId));
       } else {
         await api.post(`/enrollments/enroll/${seriesId}`, {});
         setEnrolledIds(prev => new Set(prev).add(seriesId));
-        const ts = allTestSeries.find((t: any) => t._id === seriesId);
         if (ts) setEnrolledSeries(prev => [...prev, ts]);
       }
     } catch {}
@@ -230,6 +371,8 @@ export default function StudentDashboard() {
 
   function renderTestSeriesCard(ts: any, isEnrolled: boolean) {
     const isBusy = enrolling.has(ts._id);
+    const isPaid = ts.price > 0;
+    const showBuy = isPaid && !isEnrolled;
     return (
       <div key={ts._id} className="rounded-3xl border border-border bg-card overflow-hidden hover:shadow-md transition-shadow">
         <div
@@ -273,11 +416,13 @@ export default function StudentDashboard() {
               className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                 isEnrolled
                   ? 'border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 bg-rose-500/5'
+                  : showBuy
+                  ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md shadow-amber-600/20'
                   : 'bg-primary text-white hover:bg-primary/95 shadow-md shadow-primary/20'
               } disabled:opacity-50`}
             >
-              {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isEnrolled ? <XCircle className="w-3.5 h-3.5" /> : <PlusCircle className="w-3.5 h-3.5" />}
-              {isBusy ? '' : isEnrolled ? 'Unenroll' : 'Enroll'}
+              {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isEnrolled ? <XCircle className="w-3.5 h-3.5" /> : showBuy ? <Lock className="w-3.5 h-3.5" /> : <PlusCircle className="w-3.5 h-3.5" />}
+              {isBusy ? '' : isEnrolled ? 'Unenroll' : showBuy ? 'Buy Full Series' : 'Enroll'}
             </button>
             <span className="text-xs text-muted-foreground font-semibold">{expandedSeriesId === ts._id ? '▲' : '▼'}</span>
           </div>
@@ -304,15 +449,41 @@ export default function StudentDashboard() {
                         <span>Pass: {test.passingMode === 'auto' ? 'Auto (Merit)' : `${test.passingMarks}%`}</span>
                         <span>Sections: {test.sections?.length || 0}</span>
                         {test.attemptLimit ? <span>Attempts: {test.attemptLimit}</span> : null}
+                        {test.availability?.status === 'scheduled' && test.availability?.opensAt && (
+                          <span className="px-2 py-0.5 rounded bg-violet-500/10 text-violet-500 text-[10px] font-bold">
+                            Opens {new Date(test.availability.opensAt).toLocaleString()}
+                          </span>
+                        )}
+                        {test.availability?.status === 'expired' && (
+                          <span className="px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 text-[10px] font-bold">Closed</span>
+                        )}
+                        {test.availability?.status === 'available' && test.scheduled && (
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold animate-pulse">LIVE</span>
+                        )}
                       </div>
                     </div>
-                    <Link
-                      href={`/cbt/${test._id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-primary/95 transition-all text-sm flex items-center justify-center gap-2 shadow-md shadow-primary/20 whitespace-nowrap"
-                    >
-                      <Play className="w-4 h-4 fill-white" /> Start CBT
-                    </Link>
+                    {test.availability?.status === 'scheduled' ? (
+                      <div className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-secondary text-muted-foreground font-medium transition-all text-sm flex items-center justify-center gap-2 whitespace-nowrap cursor-not-allowed">
+                        <Clock className="w-4 h-4" /> Not Started Yet
+                      </div>
+                    ) : test.availability?.status === 'expired' ? (
+                      <div className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-secondary text-muted-foreground font-medium transition-all text-sm flex items-center justify-center gap-2 whitespace-nowrap cursor-not-allowed">
+                        <XCircle className="w-4 h-4" /> Closed
+                      </div>
+                    ) : (
+                      <Link
+                        href={test.isLocked ? '/plans' : `/cbt/${test._id}`}
+                        onClick={(e) => test.isLocked && e.stopPropagation()}
+                        className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-medium transition-all text-sm flex items-center justify-center gap-2 whitespace-nowrap ${
+                          test.isLocked
+                            ? 'bg-amber-500 text-white hover:bg-amber-500/95 shadow-md shadow-amber-500/20'
+                            : 'bg-primary text-white hover:bg-primary/95 shadow-md shadow-primary/20'
+                        }`}
+                      >
+                        {test.isLocked ? <Lock className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
+                        {test.isLocked ? 'Upgrade to Unlock' : 'Start CBT'}
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>
@@ -356,6 +527,81 @@ export default function StudentDashboard() {
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8 flex flex-col gap-8">
         
+        {/* Quick Nav */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/materials" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
+            <FolderOpen className="w-3.5 h-3.5 text-primary" /> Study Materials
+          </Link>
+          <Link href="/leaderboard" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
+            <Trophy className="w-3.5 h-3.5 text-amber-500" /> Leaderboards
+          </Link>
+          <Link href="/doubts" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
+            <HelpCircle className="w-3.5 h-3.5 text-violet-500" /> Doubts
+          </Link>
+          <Link href="/blogs" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
+            <Newspaper className="w-3.5 h-3.5 text-sky-500" /> Blogs
+          </Link>
+          <Link href="/orders" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
+            <Receipt className="w-3.5 h-3.5 text-cyan-500" /> My Orders
+          </Link>
+          <Link href="/plans" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
+            <CreditCard className="w-3.5 h-3.5 text-emerald-500" /> Plans & Pricing
+          </Link>
+          <Link href="/profile" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-sky-500" /> Profile
+          </Link>
+        </div>
+        
+        {/* Gamification */}
+        {gamification && (
+          <div className="p-5 rounded-3xl border border-border bg-card flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center font-black text-xl shadow-lg shadow-amber-500/20">
+                {gamification.level}
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Level {gamification.level}</span>
+                <div className="text-lg font-black font-outfit">{gamification.xp} XP</div>
+                <div className="w-28 h-1.5 rounded-full bg-secondary mt-1 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full" style={{ width: `${gamification.levelProgress}%` }}></div>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-rose-500 flex items-center gap-1"><Flame className="w-4 h-4 fill-rose-500" /> {gamification.streak}-day streak</span>
+              <span className="text-xs font-bold text-muted-foreground flex items-center gap-1"><Crown className="w-4 h-4 text-amber-500" /> Best: {gamification.bestStreak}</span>
+              <div className="flex items-center gap-1.5">
+                {gamification.badges.length > 0 ? gamification.badges.map((b: any) => (
+                  <span key={b.code} className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 text-[10px] font-bold" title={b.name}>🏅 {b.name}</span>
+                )) : (
+                  <span className="text-[10px] text-muted-foreground">Complete tests to earn badges!</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Announcements */}
+        {announcements.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            {announcements.map((a: any) => {
+              const accent = a.accentColor || '#6366f1';
+              return (
+                <div key={a._id} className="flex items-start gap-3 p-4 rounded-2xl shadow-sm" style={{ border: `1px solid ${accent}33`, backgroundColor: `${accent}08` }}>
+                  <Megaphone className="w-5 h-5 shrink-0 mt-0.5" style={{ color: accent }} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm font-outfit">{a.title}</span>
+                      {a.type && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase" style={{ backgroundColor: `${accent}15`, color: accent }}>{a.type}</span>}
+                    </div>
+                    {a.message && <p className="text-xs text-muted-foreground mt-0.5">{a.message}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Daily Goals Row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="p-6 rounded-3xl border border-border bg-card flex items-center gap-4 relative overflow-hidden shadow-sm">
@@ -404,25 +650,31 @@ export default function StudentDashboard() {
           </Link>
         </div>
 
-        {/* Elastic Search Bar */}
-        <div className="relative">
-          <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl border border-border bg-card shadow-sm hover:border-primary/30 transition-all">
-            <Search className="w-5 h-5 text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              placeholder="Search test series by title, exam, or tags..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/50"
-            />
-            {searching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-            {searchQuery && !searching && (
-              <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="text-muted-foreground hover:text-foreground text-xs font-semibold">
-                Clear
-              </button>
-            )}
+        {/* Performance Trend Chart */}
+        {trendData.length > 0 && (
+          <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold font-outfit flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" /> Performance Trends
+              </h3>
+              <span className="text-[10px] text-muted-foreground">Last {trendData.length} months</span>
+            </div>
+            <div className="w-full h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="avgScore" name="Avg Score" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="bestScore" name="Best Score" stroke="var(--accent)" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="avgAccuracy" name="Avg Accuracy %" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Main body grids */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -468,6 +720,26 @@ export default function StudentDashboard() {
                 <Link href="/profile" className="text-xs font-bold text-primary hover:underline">Select your preferences →</Link>
               </div>
             )}
+
+            {/* Elastic Search Bar */}
+            <div className="relative">
+              <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl border border-border bg-card shadow-sm hover:border-primary/30 transition-all">
+                <Search className="w-5 h-5 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search test series by title, exam, or tags..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/50"
+                />
+                {searching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                {searchQuery && !searching && (
+                  <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="text-muted-foreground hover:text-foreground text-xs font-semibold">
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
 
             {/* Search Results Section */}
             {isSearching && (
@@ -747,6 +1019,62 @@ export default function StudentDashboard() {
         </div>
 
       </main>
+
+      {/* Checkout Modal */}
+      {checkoutItem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold font-outfit flex items-center gap-2">
+                <Lock className="w-5 h-5 text-primary" /> Checkout
+              </h3>
+              <button onClick={closeCheckout} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-border bg-muted/20">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold">{checkoutItem.name || checkoutItem.title}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold">Test Series</span>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <IndianRupee className="w-4 h-4 text-muted-foreground" />
+                <span className="text-2xl font-black font-outfit">₹{checkoutItem.price}</span>
+              </div>
+            </div>
+
+            {/* Coupon */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1"><Ticket className="w-3.5 h-3.5" /> Coupon Code</label>
+              <div className="flex gap-2">
+                <input
+                  type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="Enter coupon" className="flex-1 px-4 py-3 rounded-xl border border-border bg-background text-sm font-bold tracking-wider uppercase"
+                />
+                <button onClick={applyCoupon} className="px-4 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95">Apply</button>
+              </div>
+              {couponInfo && <p className="text-[11px] text-emerald-500 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {couponInfo.code} applied — you save ₹{couponInfo.discount}</p>}
+              {couponError && <p className="text-[11px] text-rose-500 font-semibold">{couponError}</p>}
+            </div>
+
+            <div className="flex flex-col gap-1.5 border-t border-border pt-4 text-sm">
+              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{checkoutItem.price}</span></div>
+              {discount > 0 && <div className="flex justify-between text-emerald-500"><span>Discount</span><span>-₹{discount}</span></div>}
+              <div className="flex justify-between font-bold text-lg"><span>Total</span><span>₹{payable}</span></div>
+            </div>
+
+            {orderError && <p className="text-xs text-rose-500 font-semibold p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">{orderError}</p>}
+
+            <button
+              onClick={handleCheckout}
+              disabled={processing}
+              className="w-full py-3.5 rounded-xl bg-primary text-white font-bold hover:bg-primary/95 text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Lock className="w-4 h-4" /> Pay ₹{payable} Securely</>}
+            </button>
+            <p className="text-[10px] text-muted-foreground text-center">Payments processed securely via Razorpay</p>
+          </div>
+        </div>
+      )}
 
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground mt-auto">
         Powered by ExamOS CBT Engine. All algorithms run locally.

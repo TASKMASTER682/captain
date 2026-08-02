@@ -4,13 +4,14 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
 import { getAuthUser } from '@/lib/api';
-import { Sun, Moon, Shield, Award, BarChart2, CheckCircle2, ArrowRight, LayoutDashboard } from 'lucide-react';
+import { Sun, Moon, Shield, Award, BarChart2, CheckCircle2, ArrowRight, LayoutDashboard, Megaphone } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Home() {
   const { theme, toggleTheme } = useTheme();
   const [loggedIn, setLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState('');
+  const [announcements, setAnnouncements] = useState<any[]>([]);
 
   useEffect(() => {
     const user = getAuthUser();
@@ -18,6 +19,10 @@ export default function Home() {
       setLoggedIn(true);
       setUserRole(user.role);
     }
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/announcements/active`)
+      .then(res => res.json())
+      .then(data => setAnnouncements(Array.isArray(data?.data) ? data.data : []))
+      .catch(() => {});
   }, []);
 
   return (
@@ -144,6 +149,32 @@ export default function Home() {
           </div>
         </motion.div>
       </main>
+
+      {/* Announcements */}
+      {announcements.length > 0 && (
+        <section className="py-8 border-t border-border">
+          <div className="max-w-7xl mx-auto px-6 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-bold font-outfit">Announcements</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {announcements.map((a: any) => {
+                const accent = a.accentColor || '#6366f1';
+                return (
+                  <div key={a._id} className="flex flex-col gap-1.5 p-4 rounded-2xl shadow-sm" style={{ border: `1px solid ${accent}33`, backgroundColor: `${accent}08` }}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm font-outfit">{a.title}</span>
+                      {a.type && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase" style={{ backgroundColor: `${accent}15`, color: accent }}>{a.type}</span>}
+                    </div>
+                    {a.message && <p className="text-xs text-muted-foreground leading-relaxed">{a.message}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Features Grid */}
       <section id="features" className="py-24 bg-secondary/50 border-t border-border">

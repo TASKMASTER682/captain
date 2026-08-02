@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { 
   ArrowLeft, CheckCircle2, XCircle, Info, BookOpen, 
-  HelpCircle, ChevronRight, Bookmark, Sparkles, Filter 
+  HelpCircle, ChevronRight, Bookmark, Sparkles, Filter, Clock, Timer
 } from 'lucide-react';
 import QuestionRenderer from '@/components/QuestionRenderer';
 import Link from 'next/link';
@@ -34,6 +34,10 @@ function PracticeContent() {
   const [score, setScore] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'learning' | 'exam'>('learning');
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [examEnded, setExamEnded] = useState(false);
+  const [answersLog, setAnswersLog] = useState<{ q: any; selected: string; correct: boolean }[]>([]);
 
   // Auto-generate if query parameters exist
   useEffect(() => {
@@ -48,18 +52,45 @@ function PracticeContent() {
       const res = await api.get(
         `/practice/generate?subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&difficulty=${difficulty}&limit=10`
       );
-      setQuestions(res.data || []);
+      const qs = res.data || [];
+      setQuestions(qs);
       setSessionActive(true);
       setCurrentIndex(0);
       setIsAnswered(false);
       setSelectedOpt('');
       setScore(0);
+      setExamEnded(false);
+      setAnswersLog([]);
+      if (mode === 'exam') {
+        setTimeLeft(qs.length * 60);
+        setSelectedOpt('');
+        setIsAnswered(false);
+      }
       setLoading(false);
-      checkBookmarkStatus(res.data[0]?._id);
+      checkBookmarkStatus(qs[0]?._id);
     } catch (err) {
       console.error('Failed to generate practice set', err);
       setLoading(false);
     }
+  };
+
+  // Exam-mode countdown timer
+  useEffect(() => {
+    if (mode !== 'exam' || !sessionActive || examEnded || timeLeft <= 0) return;
+    const t = setTimeout(() => {
+      if (timeLeft <= 1) {
+        handleEndExam();
+      } else {
+        setTimeLeft(prev => prev - 1);
+      }
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [mode, sessionActive, examEnded, timeLeft]);
+
+  const handleEndExam = () => {
+    setIsAnswered(false);
+    setExamEnded(true);
+    setSessionActive(false);
   };
 
   const checkBookmarkStatus = async (qId: string) => {
@@ -103,6 +134,26 @@ function PracticeContent() {
     }
   };
 
+  const saveAndNext = () => {
+    const q = questions[currentIndex];
+    const isCorrect = q.correctAnswer.includes(selectedOpt);
+    const nextLog = [...answersLog, { q, selected: selectedOpt, correct: isCorrect }];
+    setAnswersLog(nextLog);
+    if (isCorrect) setScore(prev => prev + 1);
+    if (currentIndex < questions.length - 1) {
+      const nextIdx = currentIndex + 1;
+      setCurrentIndex(nextIdx);
+      setIsAnswered(false);
+      setSelectedOpt('');
+      checkBookmarkStatus(questions[nextIdx]?._id);
+    } else {
+      // Exam finished
+      setExamEnded(true);
+      setSessionActive(false);
+      setTimeLeft(0);
+    }
+  };
+
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
       const nextIdx = currentIndex + 1;
@@ -136,15 +187,71 @@ function PracticeContent() {
           <h1 className="font-bold text-lg font-outfit">Adaptive Practice Deck</h1>
         </div>
         {sessionActive && (
-          <div className="text-xs font-semibold text-primary px-3 py-1.5 rounded-lg bg-primary/10">
-            Score: {score} / {currentIndex + (isAnswered ? 1 : 0)}
+          <div className="flex items-center gap-2">
+            {mode === 'exam' && (
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${timeLeft <= 60 ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                ⏱ {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+              </span>
+            )}
+            <div className="text-xs font-semibold text-primary px-3 py-1.5 rounded-lg bg-primary/10">
+              Score: {score} / {currentIndex + (isAnswered ? 1 : 0)}
+            </div>
           </div>
         )}
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
         
-        {!sessionActive ? (
+        {examEnded ? (
+          /* Exam Mode Review Screen */
+          <div className="p-8 rounded-3xl border border-border bg-card shadow-lg flex flex-col gap-6">
+            <div className="flex items-center gap-2 text-rose-600 font-bold">
+              <Timer className="w-5 h-5" />
+              <h2 className="text-xl font-outfit">Exam Style — Result</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-6 rounded-2xl border border-border bg-background flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Score</span>
+                <span className="text-3xl font-black font-outfit text-primary">{score} / {questions.length}</span>
+              </div>
+              <div className="p-6 rounded-2xl border border-border bg-background flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Accuracy</span>
+                <span className="text-3xl font-black font-outfit text-emerald-500">
+                  {questions.length > 0 ? Math.round((score / questions.length) * 100) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <h3 className="text-sm font-bold font-outfit flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Review Answers
+              </h3>
+              {answersLog.map((entry: any, i: number) => (
+                <div key={i} className={`p-4 rounded-2xl border flex flex-col gap-2 ${entry.correct ? 'border-emerald-500/20 bg-emerald-500/[0.03]' : 'border-rose-500/20 bg-rose-500/[0.03]'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold">Q{i + 1}. {entry.q.body?.split('\n')[0]}</span>
+                    {entry.correct ? (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold shrink-0"><CheckCircle2 className="w-3 h-3" /> Correct</span>
+                    ) : (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 text-[10px] font-bold shrink-0"><XCircle className="w-3 h-3" /> Wrong</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground flex flex-col gap-0.5">
+                    <span>Your answer: <b className="text-foreground">{entry.selected || 'Skipped'}</b></span>
+                    {!entry.correct && <span>Correct: <b className="text-emerald-500">{(entry.q.correctAnswer || []).join(', ')}</b></span>}
+                  </div>
+                  {entry.q.explanation && (
+                    <p className="text-[11px] text-muted-foreground whitespace-pre-line border-t border-border/50 pt-2">{entry.q.explanation}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => { setExamEnded(false); setSessionActive(false); }} className="py-4 rounded-xl bg-primary text-white font-bold hover:bg-primary/95 transition-all text-sm">
+              Start a New Practice Deck
+            </button>
+          </div>
+        ) : !sessionActive ? (
           /* Filter Selection Board */
           <div className="p-8 rounded-3xl border border-border bg-card shadow-lg flex flex-col gap-6">
             <div className="flex items-center gap-2 text-primary font-bold">
@@ -195,7 +302,37 @@ function PracticeContent() {
                   <option value="Hard">Hard Only</option>
                 </select>
               </div>
+              <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Practice Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setMode('learning')}
+                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                    mode === 'learning'
+                      ? 'bg-primary text-white shadow-md shadow-primary/20'
+                      : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4 inline mr-1" /> Learning
+                </button>
+                <button
+                  onClick={() => setMode('exam')}
+                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                    mode === 'exam'
+                      ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
+                      : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  <Clock className="w-4 h-4 inline mr-1" /> Exam Style
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                {mode === 'learning'
+                  ? 'Untimed, instant feedback & explanations on.'
+                  : 'Timed (60s/question), explanations hidden until you finish.'}
+              </p>
             </div>
+          </div>
 
             <button 
               onClick={handleStartPractice}
@@ -264,7 +401,21 @@ function PracticeContent() {
             </div>
 
             {/* Answer feedback & actions */}
-            {!isAnswered ? (
+            {mode === 'exam' ? (
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={saveAndNext}
+                  disabled={!selectedOpt}
+                  className="py-4 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 disabled:opacity-50 transition-all text-sm flex items-center justify-center gap-2"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                  {currentIndex < questions.length - 1 ? 'Save & Next' : 'Finish Exam'}
+                </button>
+                <button onClick={handleEndExam} className="py-3 rounded-xl border border-border text-muted-foreground text-xs font-semibold hover:bg-muted transition-colors">
+                  End & Review Answers
+                </button>
+              </div>
+            ) : !isAnswered ? (
               <button 
                 onClick={handleCheckAnswer}
                 disabled={!selectedOpt}

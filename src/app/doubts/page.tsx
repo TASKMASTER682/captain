@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { ArrowLeft, HelpCircle, Plus, Send, X, Search, Bot, CheckCircle2, Trash2, MessageSquare, Lock, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RichText } from '@/components/RichText';
 
-export default function DoubtsPage() {
+function DoubtsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeDoubtId = searchParams.get('id');
@@ -272,5 +272,13 @@ export default function DoubtsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DoubtsPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background text-foreground flex items-center justify-center font-sans">Loading...</div>}>
+      <DoubtsPage />
+    </Suspense>
   );
 }

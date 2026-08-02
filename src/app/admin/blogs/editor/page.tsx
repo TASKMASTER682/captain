@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { ArrowLeft, Save, Send, X, Search, FileText, File, Video, Plus, Trash2, Newspaper, Code2, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function BlogEditor() {
+function BlogEditor() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
@@ -244,5 +244,13 @@ export default function BlogEditor() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BlogEditorPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background text-foreground flex items-center justify-center font-sans">Loading...</div>}>
+      <BlogEditor />
+    </Suspense>
   );
 }

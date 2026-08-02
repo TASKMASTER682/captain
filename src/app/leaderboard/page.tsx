@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { ArrowLeft, Trophy, Crown, Medal, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function LeaderboardPage() {
+function LeaderboardPage() {
   const searchParams = useSearchParams();
   const testId = searchParams.get('testId');
   const seriesId = searchParams.get('testSeriesId');
@@ -161,5 +161,13 @@ export default function LeaderboardPage() {
         Powered by ExamOS Analytics Engine.
       </footer>
     </div>
+  );
+}
+
+export default function LeaderboardPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background text-foreground flex items-center justify-center font-sans">Loading...</div>}>
+      <LeaderboardPage />
+    </Suspense>
   );
 }

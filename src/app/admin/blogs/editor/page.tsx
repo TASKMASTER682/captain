@@ -65,12 +65,15 @@ function BlogEditor() {
   };
 
   const save = async (status: string) => {
-    if (!form.title.trim()) { alert('Blog title is required.'); return; }
+    if (!form.content.trim()) { alert('Please paste the blog HTML content.'); return; }
+    const title = extractTitle(form.content) || form.title.trim();
+    if (!title) { alert('No <h1> title found in the content. Add an <h1> tag or set the title.'); return; }
+    const excerpt = extractExcerpt(form.content) || form.excerpt.trim();
     setSaving(true);
     try {
       const payload = {
-        title: form.title, slug: form.slug || undefined, excerpt: form.excerpt,
-        content: form.content, coverImage: form.coverImage,
+        title, excerpt,
+        slug: form.slug || undefined, content: form.content, coverImage: form.coverImage,
         tags: form.tags, subject: form.subject,
         status,
         materials: attached.map((m: any) => m._id),
@@ -86,6 +89,20 @@ function BlogEditor() {
     note: { icon: FileText, color: 'text-sky-500 bg-sky-500/10', label: 'Note' },
     pdf: { icon: File, color: 'text-rose-500 bg-rose-500/10', label: 'PDF' },
     video: { icon: Video, color: 'text-violet-500 bg-violet-500/10', label: 'Video' },
+  };
+
+  // Extract the title from the first <h1> tag in the pasted HTML
+  const extractTitle = (html: string): string => {
+    const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+    if (!m) return '';
+    return m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  };
+
+  // Extract the first 300 characters of visible text AFTER the <h1> tag
+  const extractExcerpt = (html: string): string => {
+    const withoutH1 = html.replace(/<h1[^>]*>[\s\S]*?<\/h1>/i, '');
+    const text = withoutH1.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return text.slice(0, 300);
   };
 
   if (loading) {
@@ -118,12 +135,9 @@ function BlogEditor() {
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
         <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-muted-foreground">Title *</label>
-            <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-              className="px-4 py-3 rounded-xl border border-border bg-background text-sm font-semibold font-playfair" placeholder="e.g. Urbanization: A Comprehensive Guide" />
+          <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-[11px] text-muted-foreground">
+            <span className="font-semibold text-primary">Auto-extracted:</span> the blog title is read from your first <span className="font-mono">&lt;h1&gt;</span> tag, and the list preview description is the first 300 characters of the content after it.
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-muted-foreground">Slug (optional — auto-generated)</label>
@@ -135,12 +149,6 @@ function BlogEditor() {
               <input type="text" value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })}
                 className="px-4 py-3 rounded-xl border border-border bg-background text-sm" placeholder="e.g. General Studies" />
             </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-muted-foreground">Excerpt (short summary shown in blog list)</label>
-            <input type="text" value={form.excerpt} onChange={e => setForm({ ...form, excerpt: e.target.value })}
-              className="px-4 py-3 rounded-xl border border-border bg-background text-sm" placeholder="Key data points on urbanization" />
           </div>
 
           <div className="flex flex-col gap-1">

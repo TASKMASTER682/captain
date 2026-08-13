@@ -61,9 +61,32 @@ const redirectToLogin = () => {
 const isAuthEndpoint = (endpoint: string) =>
   endpoint.startsWith('/auth/login') ||
   endpoint.startsWith('/auth/register') ||
-  endpoint.startsWith('/auth/otp');
+  endpoint.startsWith('/auth/otp') ||
+  endpoint.startsWith('/auth/refresh');
 
-async function request(endpoint: string, options: RequestInit = {}) {
+interface Subscriber {
+  resolve: (token: string) => void;
+  reject: (err: any) => void;
+}
+
+let isRefreshing = false;
+let refreshSubscribers: Subscriber[] = [];
+
+const subscribeTokenRefresh = (resolve: (token: string) => void, reject: (err: any) => void) => {
+  refreshSubscribers.push({ resolve, reject });
+};
+
+const onRefreshed = (token: string) => {
+  refreshSubscribers.forEach((sub) => sub.resolve(token));
+  refreshSubscribers = [];
+};
+
+const onRefreshFailed = (err: any) => {
+  refreshSubscribers.forEach((sub) => sub.reject(err));
+  refreshSubscribers = [];
+};
+
+async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
   const headers = new Headers(options.headers);
   if (cachedToken) {
     headers.set('Authorization', `Bearer ${cachedToken}`);
@@ -72,13 +95,74 @@ async function request(endpoint: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
+  options.credentials = 'include';
+
   const url = `${API_BASE}${endpoint}`;
   const res = await fetch(url, { ...options, headers });
 
-  // Session expired / invalid token — drop the stale session and bounce to login.
+  // Session expired / invalid token — try refreshing
   if (res.status === 401 && !isAuthEndpoint(endpoint) && cachedToken) {
-    clearAuth();
-    redirectToLogin();
+    const retryRequest = new Promise((resolve, reject) => {
+      subscribeTokenRefresh(
+        (newToken) => {
+          headers.set('Authorization', `Bearer ${newToken}`);
+          fetch(url, { ...options, headers })
+            .then((retryRes) => {
+              if (!retryRes.ok) {
+                retryRes.json().then((errData) => {
+                  const error: any = new Error(errData.message || `API request failed (${retryRes.status}).`);
+                  error.status = retryRes.status;
+                  reject(error);
+                }).catch(() => {
+                  const error: any = new Error(`API request failed (${retryRes.status}).`);
+                  error.status = retryRes.status;
+                  reject(error);
+                });
+              } else {
+                resolve(retryRes.json());
+              }
+            })
+            .catch(reject);
+        },
+        (err) => {
+          reject(err);
+        }
+      );
+    });
+
+    if (!isRefreshing) {
+      isRefreshing = true;
+      try {
+        const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          const newToken = refreshData.data.token;
+          const user = refreshData.data.user;
+          setAuthToken(newToken, user);
+          isRefreshing = false;
+          onRefreshed(newToken);
+        } else {
+          isRefreshing = false;
+          clearAuth();
+          redirectToLogin();
+          const error: any = new Error('Session expired.');
+          error.status = 401;
+          onRefreshFailed(error);
+        }
+      } catch (refreshErr) {
+        isRefreshing = false;
+        clearAuth();
+        redirectToLogin();
+        onRefreshFailed(refreshErr);
+      }
+    }
+
+    return retryRequest;
   }
 
   if (!res.ok) {
@@ -95,6 +179,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
 export const downloadMaterial = async (id: string, title?: string) => {
   const res = await fetch(`${API_BASE}/materials/${id}/download`, {
     headers: cachedToken ? { Authorization: `Bearer ${cachedToken}` } : {},
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(
@@ -112,6 +197,7 @@ export const downloadMaterial = async (id: string, title?: string) => {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+
 };
 
 // Export wrapper helpers

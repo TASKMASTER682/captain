@@ -84,6 +84,7 @@ export default function StudentDashboard() {
   const [subjects, setSubjects] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [analyticsLocked, setAnalyticsLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userAgencies, setUserAgencies] = useState<any[]>([]);
   const [userExams, setUserExams] = useState<any[]>([]);
@@ -109,9 +110,9 @@ export default function StudentDashboard() {
         api.get('/enrollments/me').catch(() => ({ data: [] })),
         api.get('/attempts/history').catch(() => ({ data: [] })),
         api.get('/practice/recommendations').catch(() => ({ data: [] })),
-        api.get('/my-analytics/weak-areas').catch(() => ({ data: [] })),
+        api.get('/my-analytics/weak-areas').catch((e: any) => { if (e?.status === 403) setAnalyticsLocked(true); return { data: [] }; }),
         api.get('/my-analytics/daily-stats').catch(() => ({ data: null })),
-        api.get('/my-analytics/trends?months=6').catch(() => ({ data: [] })),
+        api.get('/my-analytics/trends?months=6').catch((e: any) => { if (e?.status === 403) setAnalyticsLocked(true); return { data: [] }; }),
         api.get('/my-analytics/gamification').catch(() => ({ data: null })),
         api.get('/questions/subjects').catch(() => ({ data: [] })),
         api.get('/agencies').catch(() => ({ data: [] })),
@@ -442,7 +443,10 @@ export default function StudentDashboard() {
                 {seriesTests.map((test) => (
                   <div key={test._id} className="p-5 rounded-2xl border border-border bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-primary/30 transition-colors">
                     <div className="flex flex-col gap-1 flex-1">
-                      <h4 className="font-bold text-sm font-outfit">{test.title}</h4>
+                      <h4 className="font-bold text-sm font-outfit flex items-center gap-2">{test.title}
+                        {test.memberOnly && <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[9px] font-bold">MEMBERS</span>}
+                        {test.isFree && !test.memberOnly && <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[9px] font-bold">FREE</span>}
+                      </h4>
                       {test.description && <p className="text-xs text-muted-foreground line-clamp-1">{test.description}</p>}
                       <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1.5 flex-wrap">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{test.duration} min</span>
@@ -649,6 +653,22 @@ export default function StudentDashboard() {
             </div>
           </Link>
         </div>
+
+        {/* Members-only analytics upgrade prompt */}
+        {analyticsLocked && (
+          <div className="p-6 rounded-3xl border border-amber-500/20 bg-amber-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0"><Crown className="w-5 h-5" /></div>
+              <div>
+                <h3 className="font-bold font-outfit text-sm flex items-center gap-2">Deep Performance Analytics <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[9px] font-bold">MEMBERS</span></h3>
+                <p className="text-xs text-muted-foreground mt-1">Unlock monthly performance trends, accuracy charts and weak-area analysis with a paid plan.</p>
+              </div>
+            </div>
+            <Link href="/plans" className="px-5 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-500/95 shadow-md shadow-amber-500/20 flex items-center gap-2 whitespace-nowrap">
+              <Sparkles className="w-3.5 h-3.5" /> Upgrade to Unlock
+            </Link>
+          </div>
+        )}
 
         {/* Performance Trend Chart */}
         {trendData.length > 0 && (

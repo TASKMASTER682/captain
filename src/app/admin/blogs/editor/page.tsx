@@ -66,13 +66,11 @@ function BlogEditor() {
 
   const save = async (status: string) => {
     if (!form.content.trim()) { alert('Please paste the blog HTML content.'); return; }
-    const title = extractTitle(form.content) || form.title.trim();
-    if (!title) { alert('No <h1> title found in the content. Add an <h1> tag or set the title.'); return; }
-    const excerpt = extractExcerpt(form.content) || form.excerpt.trim();
+    const title = extractTitle(form.content);
+    if (!title) { alert('No <h1> title found in the content. Add an <h1> tag first.'); return; }
     setSaving(true);
     try {
       const payload = {
-        title, excerpt,
         slug: form.slug || undefined, content: form.content, coverImage: form.coverImage,
         tags: form.tags, subject: form.subject,
         status,
@@ -96,13 +94,6 @@ function BlogEditor() {
     const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
     if (!m) return '';
     return m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  };
-
-  // Extract the first 300 characters of visible text AFTER the <h1> tag
-  const extractExcerpt = (html: string): string => {
-    const withoutH1 = html.replace(/<h1[^>]*>[\s\S]*?<\/h1>/i, '');
-    const text = withoutH1.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    return text.slice(0, 300);
   };
 
   if (loading) {
@@ -136,7 +127,7 @@ function BlogEditor() {
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
         <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4">
           <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-[11px] text-muted-foreground">
-            <span className="font-semibold text-primary">Auto-extracted:</span> the blog title is read from your first <span className="font-mono">&lt;h1&gt;</span> tag, and the list preview description is the first 300 characters of the content after it.
+            <span className="font-semibold text-primary">Auto-extracted for SEO (not shown on the reading page):</span> title from your first <span className="font-mono">&lt;h1&gt;</span>, meta description from <span className="font-mono">&lt;meta name="description"&gt;</span> (or the first paragraph after the <span className="font-mono">&lt;h1&gt;</span>), and tags from your <span className="font-mono">#Tag</span> pills — merged with the Tags field below.
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { api, getAuthUser, API_BASE } from '@/lib/api';
+import { api, getAuthUser, downloadMaterial } from '@/lib/api';
 import { ArrowLeft, Search, FileText, File, Video, Download, FolderOpen, Tag } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,10 +19,12 @@ export default function MaterialsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isMember, setIsMember] = useState(false);
 
   useEffect(() => {
     const user = getAuthUser();
     if (!user) { router.push('/login'); return; }
+    setIsMember(user?.subscription?.status === 'active');
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
   }, [search, router]);
@@ -43,11 +45,12 @@ export default function MaterialsPage() {
     load();
   }, [debouncedSearch, typeFilter]);
 
-  const handleDownload = async (id: string) => {
+  const handleDownload = async (m: any) => {
     try {
-      const token = localStorage.getItem('token');
-      window.open(`${API_BASE}/materials/${id}/download?token=${encodeURIComponent(token || '')}`, '_blank');
-    } catch (err) { /* handled by server */ }
+      await downloadMaterial(m._id, m.title);
+    } catch (err: any) {
+      alert(err.message || 'Download failed.');
+    }
   };
 
   const typeFilterButtons = ['', 'note', 'pdf', 'video'];
@@ -103,13 +106,17 @@ export default function MaterialsPage() {
             {materials.map((m: any) => {
               const meta = typeMeta[m.type] || typeMeta.note;
               const Icon = meta.icon;
+              const memberLocked = m.accessTier === 'member' && !isMember;
               return (
                 <div key={m._id} className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-3 hover:border-primary/30 hover:shadow-md transition-all">
                   <div className="flex items-start justify-between">
                     <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${meta.color}`}>
                       <Icon className="w-5 h-5" />
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-secondary text-muted-foreground text-[10px] font-bold uppercase">{meta.label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${m.accessTier === 'member' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{m.accessTier === 'member' ? 'PRO' : 'FREE'}</span>
+                      <span className="px-2 py-0.5 rounded bg-secondary text-muted-foreground text-[10px] font-bold uppercase">{meta.label}</span>
+                    </div>
                   </div>
                   <h3 className="font-bold text-sm font-outfit line-clamp-2">{m.title}</h3>
                   {m.description && <p className="text-xs text-muted-foreground line-clamp-2">{m.description}</p>}
@@ -133,11 +140,11 @@ export default function MaterialsPage() {
                     </div>
                   )}
                   <button
-                    onClick={() => handleDownload(m._id)}
-                    className="mt-auto w-full py-2.5 rounded-xl bg-primary/10 text-primary text-xs font-bold hover:bg-primary hover:text-white transition-colors flex items-center justify-center gap-1.5"
+                    onClick={() => memberLocked ? router.push('/plans') : handleDownload(m)}
+                    className={`mt-auto w-full py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${memberLocked ? 'bg-amber-500/10 text-amber-500' : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'}`}
                   >
                     <Download className="w-3.5 h-3.5" />
-                    {m.type === 'video' ? 'Open Video' : 'Download'} · {m.downloadCount || 0}
+                    {memberLocked ? 'Upgrade to Unlock · ' : (m.type === 'video' ? 'Open Video' : 'Download') + ' · '}{m.downloadCount || 0}
                   </button>
                 </div>
               );

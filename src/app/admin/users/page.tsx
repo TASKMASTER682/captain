@@ -13,6 +13,7 @@ export default function UserManagement() {
   const [query, setQuery] = useState('');
   const [resetFor, setResetFor] = useState<any>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [roleMenuFor, setRoleMenuFor] = useState<string | null>(null);
 
   const ALL_ROLES = ['User', 'Content Manager', 'Support', 'Super Admin'];
@@ -68,10 +69,12 @@ export default function UserManagement() {
 
   const handleResetPassword = async () => {
     if (!newPassword || newPassword.length < 6) { alert('Password must be at least 6 characters.'); return; }
+    if (!adminPassword) { alert('Please re-enter your admin password to confirm.'); return; }
     try {
-      await api.post(`/admin/users/${resetFor._id}/reset-password`, { newPassword });
+      await api.post(`/admin/users/${resetFor._id}/reset-password`, { newPassword, adminPassword });
       setResetFor(null);
       setNewPassword('');
+      setAdminPassword('');
       alert('Password reset successfully.');
     } catch (err: any) { alert(err.message); }
   };
@@ -167,7 +170,9 @@ export default function UserManagement() {
           <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
             <h3 className="text-xl font-bold font-outfit">Reset Password</h3>
             <p className="text-xs text-muted-foreground">Set a new password for <span className="font-semibold text-foreground">{resetFor.name}</span> ({resetFor.email})</p>
-            <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 6 chars)"
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 6 chars)"
+              className="px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Your admin password (confirm action)"
               className="px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
             <div className="flex gap-2">
               <button onClick={() => setResetFor(null)} className="flex-1 py-3 rounded-xl bg-secondary text-sm font-semibold hover:bg-secondary/80">Cancel</button>

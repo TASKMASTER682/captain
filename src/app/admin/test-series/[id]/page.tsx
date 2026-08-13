@@ -38,6 +38,10 @@ export default function TestSeriesDetail() {
   const [scheduled, setScheduled] = useState(false);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [includedInSubscription, setIncludedInSubscription] = useState(false);
+  const [freeWindowOn, setFreeWindowOn] = useState(false);
+  const [freeFrom, setFreeFrom] = useState('');
+  const [freeTo, setFreeTo] = useState('');
   const [sections, setSections] = useState<any[]>([
     { name: 'Section 1', duration: 0, negativeMarking: true, marksPerQuestion: 2, negativeMarksPerQuestion: 0.5, questionIds: [] }
   ]);
@@ -123,6 +127,7 @@ export default function TestSeriesDetail() {
     setCalculatorAllowed(false); setFullscreenRequired(true);
     setShuffleQuestions(true); setShuffleOptions(true);
     setScheduled(false); setStartTime(''); setEndTime('');
+    setIncludedInSubscription(false); setFreeWindowOn(false); setFreeFrom(''); setFreeTo('');
     setSections([{ name: 'Section 1', duration: 0, negativeMarking: true, marksPerQuestion: 2, negativeMarksPerQuestion: 0.5, questionIds: [] }]);
     setQuestionPaste('');
     setQuestionMode('paste');
@@ -139,6 +144,11 @@ export default function TestSeriesDetail() {
     setScheduled(!!t.scheduled);
     setStartTime(t.startTime ? new Date(t.startTime).toISOString().slice(0, 16) : '');
     setEndTime(t.endTime ? new Date(t.endTime).toISOString().slice(0, 16) : '');
+    setIncludedInSubscription(!!t.includedInSubscription);
+    const fw = t.freeWindow || {};
+    setFreeWindowOn(!!(fw.from || fw.to));
+    setFreeFrom(fw.from ? new Date(fw.from).toISOString().slice(0, 16) : '');
+    setFreeTo(fw.to ? new Date(fw.to).toISOString().slice(0, 16) : '');
     setSections(t.sections?.map((s: any) => ({
       name: s.name, duration: s.duration || 0,
       negativeMarking: s.negativeMarking,
@@ -296,6 +306,13 @@ export default function TestSeriesDetail() {
         calculatorAllowed, fullscreenRequired, shuffleQuestions, shuffleOptions,
         scheduled, startTime: scheduled && startTime ? new Date(startTime).toISOString() : null,
         endTime: scheduled && endTime ? new Date(endTime).toISOString() : null,
+        includedInSubscription,
+        freeWindow: freeWindowOn
+          ? {
+              from: freeFrom ? new Date(freeFrom).toISOString() : null,
+              to: freeTo ? new Date(freeTo).toISOString() : null,
+            }
+          : { from: null, to: null },
         sections: finalSections.map(s => ({
           name: s.name, duration: s.duration,
           negativeMarking: s.negativeMarking,
@@ -303,7 +320,7 @@ export default function TestSeriesDetail() {
           negativeMarksPerQuestion: s.negativeMarksPerQuestion || 0.5,
           questions: s.questionIds || [],
         })),
-        status: 'Published',
+        status: 'published',
       };
 
       if (editingTest) { await api.put(`/tests/${editingTest._id}`, payload); }
@@ -380,7 +397,7 @@ export default function TestSeriesDetail() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-bold">{t.title}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${t.status === 'Published' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>{t.status}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${t.status === 'published' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>{t.status}</span>
                       {t.scheduled && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-500/10 text-violet-500">
                           Scheduled {t.startTime ? `· ${new Date(t.startTime).toLocaleString()}` : ''}
@@ -537,6 +554,35 @@ export default function TestSeriesDetail() {
                 </div>
               )}
               {scheduled && !startTime && <p className="text-[10px] text-amber-500 mt-2">Students can only start within the window. Leave "Closes At" empty for no end limit.</p>}
+            </div>
+
+            {/* Monetization */}
+            <div className="p-5 rounded-2xl border border-border bg-background">
+              <h4 className="text-sm font-bold font-outfit flex items-center gap-2 mb-3"><Layers className="w-4 h-4 text-violet-500" /> Monetization / Access</h4>
+              <div className="flex flex-col gap-3">
+                <label className="flex items-center justify-between p-3 rounded-xl border border-border bg-card cursor-pointer text-xs font-semibold">
+                  <span className="flex items-center gap-2">Included in paid plans <span className="px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 text-[9px] font-bold">MEMBERS</span></span>
+                  <input type="checkbox" checked={includedInSubscription} onChange={e => setIncludedInSubscription(e.target.checked)} className="rounded border-border text-primary" />
+                </label>
+                <p className="text-[10px] text-muted-foreground -mt-1">Members-only test — only users with an active paid plan can attempt it. If unchecked, access is decided by the test series price.</p>
+                <label className="flex items-center justify-between p-3 rounded-xl border border-border bg-card cursor-pointer text-xs font-semibold">
+                  <span className="flex items-center gap-2">Free access window <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[9px] font-bold">FREE</span></span>
+                  <input type="checkbox" checked={freeWindowOn} onChange={e => setFreeWindowOn(e.target.checked)} className="rounded border-border text-primary" />
+                </label>
+                <p className="text-[10px] text-muted-foreground -mt-1">Anyone can attempt in this window without payment — perfect for "Sunday Free Mock" or trial tests.</p>
+                {freeWindowOn && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-muted-foreground">Free From</label>
+                      <input type="datetime-local" value={freeFrom} onChange={e => setFreeFrom(e.target.value)} className="px-3 py-2 rounded-xl border border-border bg-card text-sm" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-muted-foreground">Free Until</label>
+                      <input type="datetime-local" value={freeTo} onChange={e => setFreeTo(e.target.value)} className="px-3 py-2 rounded-xl border border-border bg-card text-sm" />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Sections */}

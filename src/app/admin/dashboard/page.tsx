@@ -12,7 +12,7 @@ import {
   AlertCircle, History, Filter, Building2, GraduationCap, 
   Layers, UserCog, ChevronDown, ChevronUp, RefreshCw,
   HelpCircle, IndianRupee, ShoppingCart, Ticket,
-  Megaphone, Activity, ClipboardList, ScrollText, CreditCard, Newspaper
+  Megaphone, Activity, ClipboardList, ScrollText, CreditCard, Newspaper, Star
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -243,6 +243,7 @@ export default function AdminDashboard() {
               { href: '/admin/engagement', icon: Activity, label: 'Engagement', color: 'text-violet-500 bg-violet-500/10' },
               { href: '/admin/orders', icon: ShoppingCart, label: 'Orders', color: 'text-cyan-500 bg-cyan-500/10' },
               { href: '/admin/coupons', icon: Ticket, label: 'Coupons', color: 'text-pink-500 bg-pink-500/10' },
+              { href: '/admin/plans', icon: Star, label: 'Plans / Subscriptions', color: 'text-amber-500 bg-amber-500/10' },
               { href: '/admin/announcements', icon: Megaphone, label: 'Announcements', color: 'text-sky-500 bg-sky-500/10' },
               { href: '/admin/razorpay', icon: CreditCard, label: 'Razorpay Settings', color: 'text-rose-500 bg-rose-500/10' },
               { href: '/admin/attempts', icon: ClipboardList, label: 'Student Attempts', color: 'text-violet-500 bg-violet-500/10' },

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { api, getAuthUser, clearAuth } from '@/lib/api';
 import {
   Check, ArrowLeft, ShoppingCart, Ticket, Copy, CheckCircle2,
-  Lock, Sparkles, RefreshCw, Loader2, Gift, IndianRupee, CreditCard, X
+  Lock, Sparkles, RefreshCw, Loader2, Gift, IndianRupee, CreditCard, X, Crown, Target
 } from 'lucide-react';
 
 // Razorpay checkout script loader
@@ -188,6 +188,7 @@ export default function PlansPage() {
   }[s] || 'bg-secondary text-muted-foreground');
 
   const hasActivePlan = user?.subscription?.status === 'active';
+  const currentPlan = plans.find((p: any) => p._id === user?.subscription?.planId);
 
   if (!user) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary"></div></div>;
 
@@ -235,21 +236,29 @@ export default function PlansPage() {
               <div className="p-5 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                 <div className="text-sm">
-                  <span className="font-bold text-emerald-600">Premium Active</span>
+                  <span className="font-bold text-emerald-600">{currentPlan?.name || 'Premium Active'}</span>
                   {user.subscription.expiresAt && <span className="text-muted-foreground text-xs"> · Valid till {new Date(user.subscription.expiresAt).toLocaleDateString()}</span>}
                 </div>
               </div>
             )}
 
-            {/* Subscription Plans - Hidden for now (future feature) */}
-            {/* <div>
-              <h2 className="text-xl font-bold font-outfit mb-4 flex items-center gap-2"><Crown className="w-5 h-5 text-amber-500" /> Subscription Plans</h2>
+            {/* Subscription Packs (agency/exam based) */}
+            <div>
+              <h2 className="text-xl font-bold font-outfit mb-4 flex items-center gap-2"><Crown className="w-5 h-5 text-amber-500" /> Subscription Packs</h2>
               {plans.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No subscription plans available yet.</p>
+                <p className="text-sm text-muted-foreground">No packs available for your exams yet — general packs will appear here.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {plans.map((p: any) => {
                     const isCurrent = user?.subscription?.planId === p._id && hasActivePlan;
+                    const cov = p.coverage || {};
+                    const covLabel: any = {
+                      all: 'All test series',
+                      manual: `${(cov.seriesIds || []).length} select test series`,
+                      fraction: `${Math.round((cov.fraction || 1) * 100)}% test series`,
+                      random: `Random ${Math.round((cov.fraction || 1) * 100)}% series`,
+                    };
+                    const months = p.durationMonths > 0 ? p.durationMonths : (p.durationDays > 0 ? Math.round(p.durationDays / 30) : 0);
                     return (
                       <div key={p._id} className={`p-6 rounded-3xl border bg-card flex flex-col gap-4 transition-all ${p.popular ? 'border-amber-500/40 ring-2 ring-amber-500/10 shadow-lg' : 'border-border hover:border-primary/30'}`}>
                         <div className="flex items-center justify-between">
@@ -260,6 +269,17 @@ export default function PlansPage() {
                           <span className="text-3xl font-black font-outfit">₹{p.price}</span>
                           <span className="text-xs text-muted-foreground">/ {cycleLabel[p.billingCycle] || p.billingCycle}</span>
                         </div>
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold flex-wrap">
+                          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500">{months > 0 ? `${months} month${months > 1 ? 's' : ''}` : 'Lifetime'}</span>
+                          <span className="px-2 py-0.5 rounded bg-sky-500/10 text-sky-500 flex items-center gap-1"><Target className="w-3 h-3" /> {covLabel[cov.type] || covLabel.all}</span>
+                        </div>
+                        {p.examIds?.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {p.examIds.map((e: any, i: number) => (
+                              <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-500">{e.name || e}</span>
+                            ))}
+                          </div>
+                        )}
                         {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
                         <div className="flex flex-col gap-1.5">
                           {(p.features || []).map((f: string, i: number) => (
@@ -271,14 +291,14 @@ export default function PlansPage() {
                           disabled={isCurrent}
                           className={`w-full py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${isCurrent ? 'bg-emerald-500/10 text-emerald-500 cursor-default' : p.popular ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md shadow-amber-600/20' : 'bg-primary text-white hover:bg-primary/95'}`}
                         >
-                          {isCurrent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Current Plan</> : <><Crown className="w-3.5 h-3.5" /> Subscribe</>}
+                          {isCurrent ? <><CheckCircle2 className="w-3.5 h-3.5" /> Current Pack</> : <><Crown className="w-3.5 h-3.5" /> Subscribe</>}
                         </button>
                       </div>
                     );
                   })}
                 </div>
               )}
-            </div> */}
+            </div>
 
             {/* Paid Test Series (Bundles) */}
             <div>

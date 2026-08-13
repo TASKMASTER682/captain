@@ -1,24 +1,20 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { api, getAuthUser } from '@/lib/api';
+import { api } from '@/lib/api';
 import { ArrowLeft, Newspaper, Search, CalendarDays, Eye, FileText, File, Video } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 export default function BlogsPage() {
-  const router = useRouter();
   const [blogs, setBlogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user) { router.push('/login'); return; }
     const t = setTimeout(() => setDebounced(search), 350);
     return () => clearTimeout(t);
-  }, [search, router]);
+  }, [search]);
 
   useEffect(() => {
     const load = async () => {

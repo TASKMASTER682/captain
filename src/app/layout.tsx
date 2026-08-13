@@ -23,8 +23,30 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'ExamOS - Premium Computer-Based Test (CBT) Operating System',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  title: {
+    default: 'ExamOS - Premium Computer-Based Test (CBT) Operating System',
+    template: '%s | ExamOS',
+  },
   description: 'Enterprise-grade assessment operating system for competitive exams. Speed analytics, recommendation engine, spaced repetition revision, and original government-standard CBT engine.',
+  keywords: ['CBT', 'competitive exams', 'online test series', 'exam preparation', 'mock tests', 'ExamOS'],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
+  openGraph: {
+    type: 'website',
+    siteName: 'ExamOS',
+    title: 'ExamOS - Premium CBT Operating System for Competitive Exams',
+    description: 'Enterprise-grade assessment operating system for competitive exams. Speed analytics, recommendation engine, spaced repetition revision, and original government-standard CBT engine.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ExamOS - Premium CBT Operating System for Competitive Exams',
+    description: 'Enterprise-grade assessment operating system for competitive exams.',
+  },
+  alternates: { canonical: '/' },
 };
 
 export default function RootLayout({

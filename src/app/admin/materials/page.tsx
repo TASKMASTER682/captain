@@ -15,7 +15,7 @@ export default function MaterialsManagement() {
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({
     title: '', description: '', type: 'pdf', externalUrl: '',
-    tags: '', subject: '', topic: '', examId: '', agencyId: '', fileSize: '', active: true,
+    tags: '', subject: '', topic: '', examId: '', agencyId: '', fileSize: '', active: true, accessTier: 'free',
   });
   const [exams, setExams] = useState<any[]>([]);
   const [agencies, setAgencies] = useState<any[]>([]);
@@ -42,7 +42,7 @@ export default function MaterialsManagement() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ title: '', description: '', type: 'pdf', externalUrl: '', tags: '', subject: '', topic: '', examId: '', agencyId: '', fileSize: '', active: true });
+    setForm({ title: '', description: '', type: 'pdf', externalUrl: '', tags: '', subject: '', topic: '', examId: '', agencyId: '', fileSize: '', active: true, accessTier: 'free' });
     setShowForm(true);
   };
 
@@ -53,7 +53,7 @@ export default function MaterialsManagement() {
       externalUrl: m.externalUrl, tags: (m.tags || []).join(', '),
       subject: m.subject || '', topic: m.topic || '',
       examId: m.examId?._id || m.examId || '', agencyId: m.agencyId?._id || m.agencyId || '',
-      fileSize: m.fileSize || '', active: m.active !== false,
+      fileSize: m.fileSize || '', active: m.active !== false, accessTier: m.accessTier === 'member' ? 'member' : 'free',
     });
     setShowForm(true);
   };
@@ -128,6 +128,7 @@ export default function MaterialsManagement() {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm">{m.title}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-secondary text-muted-foreground font-semibold">{meta.label}</span>
+                        {m.accessTier === 'member' && <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 font-bold">PRO</span>}
                         {!m.active && <span className="text-[10px] text-rose-500 font-bold">Hidden</span>}
                       </div>
                       {m.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{m.description}</p>}
@@ -220,6 +221,10 @@ export default function MaterialsManagement() {
                 </div>
                 <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground cursor-pointer mt-7">
                   <input type="checkbox" checked={form.active} onChange={e => setForm({...form, active: e.target.checked})} className="w-4 h-4 accent-primary" /> Active
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground cursor-pointer mt-7">
+                  <input type="checkbox" checked={form.accessTier === 'member'} onChange={e => setForm({...form, accessTier: e.target.checked ? 'member' : 'free'})} className="w-4 h-4 accent-primary" />
+                  <span className="flex items-center gap-1">PRO tier <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[9px] font-bold">MEMBERS ONLY</span></span>
                 </label>
               </div>
             </div>

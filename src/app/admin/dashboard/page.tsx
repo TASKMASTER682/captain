@@ -12,7 +12,7 @@ import {
   AlertCircle, History, Filter, Building2, GraduationCap, 
   Layers, UserCog, ChevronDown, ChevronUp, RefreshCw,
   HelpCircle, IndianRupee, ShoppingCart, Ticket,
-  Megaphone, Activity, ClipboardList, ScrollText, CreditCard, Newspaper, Star
+  Megaphone, Activity, ClipboardList, ScrollText, CreditCard, Newspaper, Star, Bug, BarChart3
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -251,6 +251,8 @@ export default function AdminDashboard() {
               { href: '/admin/materials', icon: FileText, label: 'Study Materials', color: 'text-emerald-500 bg-emerald-500/10' },
               { href: '/admin/doubts', icon: HelpCircle, label: 'Doubts Forum', color: 'text-amber-500 bg-amber-500/10' },
               { href: '/admin/blogs', icon: Newspaper, label: 'Blogs', color: 'text-sky-500 bg-sky-500/10' },
+              { href: '/admin/error-logs', icon: Bug, label: 'Error Logs', color: 'text-rose-500 bg-rose-500/10' },
+              { href: '/admin/analytics', icon: BarChart3, label: 'Analytics / Traffic', color: 'text-cyan-500 bg-cyan-500/10' },
             ].map(m => (
               <Link key={m.href} href={m.href} className="p-4 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-3 hover:border-primary/30 transition-all group">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${m.color} group-hover:scale-105 transition-transform`}><m.icon className="w-4 h-4" /></div>

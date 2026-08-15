@@ -163,8 +163,14 @@ body {
 }
 .animate-blink { animation: blink-dot 1.6s ease-in-out infinite; }
 
+@keyframes droplet-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.04); }
+}
+.animate-droplet { animation: droplet-bob 2.8s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-float, .animate-float-slow, .animate-glow, .animate-shimmer, .animate-marquee, .animate-blink {
+  .animate-float, .animate-float-slow, .animate-glow, .animate-shimmer, .animate-marquee, .animate-blink, .animate-droplet {
     animation: none;
   }
 }

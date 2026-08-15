@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Lightbulb, Quote } from 'lucide-react';
+import { Columns2, Lightbulb, Quote } from 'lucide-react';
 
 interface Option {
   key: string;
@@ -140,23 +140,55 @@ export default function QuestionRenderer({ question, showExplanation = false, sh
     return filtered.join('\n').trim();
   }, [displayBody, matchPairs, context]);
 
+  const formattedBody = useMemo(() => {
+    if (!filteredBody) return null;
+    const lines = filteredBody.split('\n');
+    return lines.map((line, idx) => {
+      if (!line.trim()) return <div key={idx} className="h-2" />;
+
+      const regex = /^(Assertion\s*\(A\)[\s:-]*|Reasoning\s*\(R\)[\s:-]*|Reason\s*\(R\)[\s:-]*|Assertion[\s:-]+|Reasoning[\s:-]+|Reason[\s:-]+)(.*)$/i;
+      const match = line.match(regex);
+      if (match) {
+        const prefix = match[1];
+        const rest = match[2];
+        const isAssertion = /assertion/i.test(prefix);
+        const colorClass = isAssertion 
+          ? 'text-rose-600 dark:text-rose-400 font-extrabold' 
+          : 'text-indigo-600 dark:text-indigo-400 font-extrabold';
+        return (
+          <div key={idx} className="text-base leading-[1.75] text-foreground">
+            <span className={colorClass}>{prefix}</span>
+            <span className="font-normal text-foreground/85">{rest}</span>
+          </div>
+        );
+      }
+      return (
+        <div key={idx} className="text-base leading-[1.75] font-bold text-foreground">
+          {line}
+        </div>
+      );
+    });
+  }, [filteredBody]);
+
   return (
     <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-6 space-y-5">
       {showHeader && <span className="sr-only">Question</span>}
 
-      {/* Type badge + difficulty */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <TypeBadge type={type} />
-        {difficulty && (
-          <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-            difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-            difficulty === 'Hard' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
-            'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-          }`}>
-            {difficulty}
-          </span>
-        )}
-      </div>
+      {/* Type badge + difficulty (review contexts only) */}
+      {showMeta && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <TypeBadge type={type} />
+          {difficulty && (
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+              difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+              difficulty === 'Hard' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
+              'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+            }`}>
+              {difficulty}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Context / Passage */}
       {context && (
@@ -170,9 +202,9 @@ export default function QuestionRenderer({ question, showExplanation = false, sh
       )}
 
       {/* Question body */}
-      {filteredBody && (
-        <div className="text-base leading-[1.75] font-bold text-foreground whitespace-pre-line">
-          {filteredBody}
+      {formattedBody && (
+        <div className="space-y-1.5">
+          {formattedBody}
         </div>
       )}
 
@@ -183,7 +215,27 @@ export default function QuestionRenderer({ question, showExplanation = false, sh
           {statements.map((s, i) => (
             <div key={i} className="flex items-start gap-3.5">
               <span className="shrink-0 w-6 h-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center text-[11px] font-bold mt-0.5">{i + 1}</span>
-              <span className="text-sm leading-relaxed text-foreground/85 pt-0.5">{s}</span>
+              <span className="text-sm leading-relaxed text-foreground/85 pt-0.5">
+                {(() => {
+                  const regex = /^(Assertion\s*\(A\)[\s:-]*|Reasoning\s*\(R\)[\s:-]*|Reason\s*\(R\)[\s:-]*|Assertion[\s:-]+|Reasoning[\s:-]+|Reason[\s:-]+)(.*)$/i;
+                  const match = s.match(regex);
+                  if (match) {
+                    const prefix = match[1];
+                    const rest = match[2];
+                    const isAssertion = /assertion/i.test(prefix);
+                    const colorClass = isAssertion 
+                      ? 'text-rose-600 dark:text-rose-400 font-extrabold' 
+                      : 'text-indigo-600 dark:text-indigo-400 font-extrabold';
+                    return (
+                      <>
+                        <span className={colorClass}>{prefix}</span>
+                        <span className="font-normal">{rest}</span>
+                      </>
+                    );
+                  }
+                  return s;
+                })()}
+              </span>
             </div>
           ))}
         </div>
@@ -191,32 +243,35 @@ export default function QuestionRenderer({ question, showExplanation = false, sh
 
       {/* Match pairs */}
       {matchPairs && matchPairs.length > 0 && (
-        <div className="overflow-hidden border-t border-border/40 pt-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gradient-to-r from-amber-500/8 to-transparent border-b border-border/30">
-                <th className="w-10 text-center py-3 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider">#</th>
-                <th className="text-left py-3 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider">List I</th>
-                <th className="w-10 text-center py-3"></th>
-                <th className="text-left py-3 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider">List II</th>
-              </tr>
-            </thead>
-            <tbody>
-              {matchPairs.map((pair, i) => {
-                const parts = pair.split(/:(.+)/);
-                const left = parts[0]?.trim() || '';
-                const right = parts[1]?.trim() || '';
-                return (
-                  <tr key={i} className={`border-b border-border/10 last:border-b-0 transition-colors hover:bg-amber-500/[0.02] ${i % 2 === 0 ? 'bg-background/40' : 'bg-transparent'}`}>
-                    <td className="text-center py-3 text-[11px] font-bold text-muted-foreground/30">{i + 1}</td>
-                    <td className="py-3 pr-3 font-semibold text-foreground/90">{left}</td>
-                    <td className="py-3 text-center text-muted-foreground/30 text-lg font-light">{right ? '→' : ''}</td>
-                    <td className="py-3 pl-3 text-foreground/80">{right}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="grid grid-cols-2">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/5 border-r border-border/40">
+              <Columns2 className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[10px] font-bold text-primary uppercase tracking-wider">List I</span>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-accent-foreground/5">
+              <Columns2 className="w-3.5 h-3.5 text-accent-foreground" />
+              <span className="text-[10px] font-bold text-accent-foreground uppercase tracking-wider">List II</span>
+            </div>
+          </div>
+          {matchPairs.map((pair, i) => {
+            const parts = pair.split(/:(.+)/);
+            const left = parts[0]?.trim() || '';
+            const right = parts[1]?.trim() || '';
+            const letter = String.fromCharCode(65 + i);
+            return (
+              <div key={i} className={`grid grid-cols-2 border-t border-border/50 ${i % 2 === 0 ? 'bg-background/50' : ''}`}>
+                <div className="flex items-start gap-3 px-4 py-3.5 border-r border-border/40">
+                  <span className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{i + 1}</span>
+                  <span className="text-sm font-semibold text-foreground/90 leading-relaxed">{left}</span>
+                </div>
+                <div className="flex items-start gap-3 px-4 py-3.5">
+                  <span className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-secondary text-secondary-foreground text-[11px] font-bold flex items-center justify-center">{letter}</span>
+                  <span className="text-sm text-foreground/80 leading-relaxed">{right}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

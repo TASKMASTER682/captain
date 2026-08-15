@@ -77,7 +77,6 @@ export default function AttemptResults() {
           </Link>
           <h1 className="font-bold text-lg font-outfit">Performance Analytics Report</h1>
         </div>
-        <span className="text-xs text-muted-foreground font-mono">ID: {attempt._id}</span>
       </header>
 
       {/* Main Container */}

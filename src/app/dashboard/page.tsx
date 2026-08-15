@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, clearAuth, getAuthUser } from '@/lib/api';
@@ -10,9 +10,9 @@ import {
   Flame, Calendar, BookOpen, Clock, BrainCircuit, BarChart3,
   Play, ClipboardList, LogOut, Sun, Moon, Sparkles, BookMarked,
   Target, Zap, AlertCircle, RotateCcw,
-  Building2, GraduationCap, Settings, Search, Loader2, CheckCircle, PlusCircle, XCircle, TrendingUp, AlertTriangle,
-  Star, UserCheck, Users, CreditCard, Lock, Megaphone, IndianRupee, Ticket, Copy, CheckCircle2, Crown, X,
-  FolderOpen, Trophy, Receipt, User, HelpCircle, Newspaper
+  Building2, GraduationCap, Settings, Loader2, CheckCircle, PlusCircle, XCircle, TrendingUp, AlertTriangle,
+  Star, UserCheck, Users, CreditCard, Lock, Megaphone, Copy, Crown,
+  FolderOpen, Trophy, Receipt, User, HelpCircle, Newspaper, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -62,8 +62,6 @@ export default function StudentDashboard() {
 
   const [user, setUser] = useState<any>(null);
 
-  // All test series loaded from API
-  const [allTestSeries, setAllTestSeries] = useState<any[]>([]);
   // Enrolled test series (populated objects)
   const [enrolledSeries, setEnrolledSeries] = useState<any[]>([]);
   // IDs of enrolled series for quick lookup
@@ -76,6 +74,8 @@ export default function StudentDashboard() {
   const [loadingTests, setLoadingTests] = useState(false);
 
   const [history, setHistory] = useState<any[]>([]);
+  const [historyPage, setHistoryPage] = useState(0);
+  const HISTORY_PAGE_SIZE = 10;
   const [recs, setRecs] = useState<any[]>([]);
   const [weakAreas, setWeakAreas] = useState<any[]>([]);
   const [dailyStats, setDailyStats] = useState<any>({ streak: 0, questionsToday: 0, timeSpentToday: 0, scoreAvg: 0 });
@@ -89,14 +89,6 @@ export default function StudentDashboard() {
   const [userAgencies, setUserAgencies] = useState<any[]>([]);
   const [userExams, setUserExams] = useState<any[]>([]);
 
-  // Checkout modal state (for paid test series)
-  const [checkoutItem, setCheckoutItem] = useState<any>(null);
-  const [couponCode, setCouponCode] = useState('');
-  const [couponInfo, setCouponInfo] = useState<any>(null);
-  const [couponError, setCouponError] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [orderError, setOrderError] = useState('');
-
   const loadData = useCallback(async () => {
     setLoading(true);
     const activeUser = getAuthUser();
@@ -105,16 +97,27 @@ export default function StudentDashboard() {
       const userAgencyIds = activeUser?.agencies || [];
       const userExamIds = activeUser?.exams || [];
 
-      const [tsRes, enrolledRes, histRes, recRes, weakRes, dailyRes, trendRes, gamRes, subjRes, allAgenciesRes, allExamsRes, bookmarkRes, annRes] = await Promise.all([
-        api.get('/test-series').catch(() => ({ data: [] })),
+      // Skip member-only analytics calls for users without an active subscription
+      const hasActiveSub =
+        activeUser?.subscription?.status === 'active' &&
+        (!activeUser?.subscription?.expiresAt || new Date(activeUser.subscription.expiresAt) > new Date());
+      if (!hasActiveSub) setAnalyticsLocked(true);
+      const lockedAnalytics = hasActiveSub
+        ? api.get('/my-analytics/weak-areas').catch((e: any) => { if (e?.status === 403) setAnalyticsLocked(true); return { data: [] }; })
+        : Promise.resolve({ data: [] });
+      const lockedTrends = hasActiveSub
+        ? api.get('/my-analytics/trends?months=6').catch((e: any) => { if (e?.status === 403) setAnalyticsLocked(true); return { data: [] }; })
+        : Promise.resolve({ data: [] });
+
+      const [enrolledRes, histRes, recRes, weakRes, dailyRes, trendRes, gamRes, subjRes, allAgenciesRes, allExamsRes, bookmarkRes, annRes] = await Promise.all([
         api.get('/enrollments/me').catch(() => ({ data: [] })),
         api.get('/attempts/history').catch(() => ({ data: [] })),
         api.get('/practice/recommendations').catch(() => ({ data: [] })),
-        api.get('/my-analytics/weak-areas').catch((e: any) => { if (e?.status === 403) setAnalyticsLocked(true); return { data: [] }; }),
+        lockedAnalytics,
         api.get('/my-analytics/daily-stats').catch(() => ({ data: null })),
-        api.get('/my-analytics/trends?months=6').catch((e: any) => { if (e?.status === 403) setAnalyticsLocked(true); return { data: [] }; }),
+        lockedTrends,
         api.get('/my-analytics/gamification').catch(() => ({ data: null })),
-        api.get('/questions/subjects').catch(() => ({ data: [] })),
+        api.get('/practice/subjects').catch(() => ({ data: [] })),
         api.get('/agencies').catch(() => ({ data: [] })),
         api.get('/exams').catch(() => ({ data: [] })),
         api.get('/bookmarks').catch(() => ({ data: [] })),
@@ -127,19 +130,19 @@ export default function StudentDashboard() {
       setUserAgencies(agencies.filter((a: any) => userAgencyIds.includes(a._id)));
       setUserExams(exams.filter((e: any) => userExamIds.includes(e._id)));
 
-      const allSeries = Array.isArray(tsRes.data) ? tsRes.data : [];
-      setAllTestSeries(allSeries);
-
       const enrolledTs = Array.isArray(enrolledRes.data) ? enrolledRes.data : [];
       const enrolledTsIds: Set<string> = new Set(enrolledTs.map((e: any) => e.testSeriesId?._id || e.testSeriesId).filter(Boolean));
       const enrolledTsObjects = enrolledTs
-        .map((e: any) => e.testSeriesId)
-        .filter((ts: any) => ts);
+        .map((e: any) => ({ ts: e.testSeriesId, at: new Date(e.enrolledAt || e.createdAt || 0).getTime() }))
+        .filter((x: any) => x.ts)
+        .sort((a: any, b: any) => b.at - a.at)
+        .map((x: any) => x.ts);
       setEnrolledIds(enrolledTsIds);
       setEnrolledSeries(enrolledTsObjects);
 
       const historyData = Array.isArray(histRes.data) ? histRes.data : [];
       setHistory(historyData);
+      setHistoryPage(0);
 
       const recData = Array.isArray(recRes.data) ? recRes.data : [];
       setRecs(recData);
@@ -156,23 +159,6 @@ export default function StudentDashboard() {
     setLoading(false);
   }, []);
 
-  // Elastic search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<NodeJS.Timeout | null>(null);
-
-  // Compute recommended series (matching user's exam preferences, not enrolled)
-  const recommendedSeries = useMemo(() => {
-    const userExamIds = user?.exams || [];
-    return allTestSeries.filter((ts: any) => {
-      const examId = ts.examId?._id || ts.examId;
-      const matchesExam = userExamIds.length === 0 || userExamIds.includes(examId);
-      const notEnrolled = !enrolledIds.has(ts._id);
-      return matchesExam && notEnrolled;
-    });
-  }, [allTestSeries, enrolledIds, user]);
-
   useEffect(() => {
     const activeUser = getAuthUser();
     if (!activeUser) {
@@ -183,170 +169,30 @@ export default function StudentDashboard() {
     loadData();
   }, [router, loadData]);
 
-  // Elastic search with debounce
-  useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    searchTimer.current = setTimeout(async () => {
-      try {
-        const res = await api.get(`/test-series/search?q=${encodeURIComponent(searchQuery.trim())}`);
-        setSearchResults(Array.isArray(res.data) ? res.data : []);
-      } catch {
-        setSearchResults([]);
-      }
-      setSearching(false);
-    }, 300);
-    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [searchQuery]);
-
   const handleLogout = () => {
     clearAuth();
     router.push('/');
   };
 
-  const openCheckout = (item: any) => {
-    setCheckoutItem(item);
-    setCouponCode('');
-    setCouponInfo(null);
-    setCouponError('');
-    setOrderError('');
-  };
-
-  const closeCheckout = () => {
-    setCheckoutItem(null);
-    setProcessing(false);
-  };
-
-  const applyCoupon = async () => {
-    if (!couponCode.trim() || !checkoutItem) return;
-    setCouponError('');
-    try {
-      const res = await api.post('/coupons/validate', {
-        code: couponCode,
-        amount: checkoutItem.price,
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start',
       });
-      setCouponInfo(res.data);
-    } catch (err: any) {
-      setCouponInfo(null);
-      setCouponError(err.message || 'Invalid coupon');
     }
   };
 
-  const discount = couponInfo?.discount || 0;
-  const payable = Math.max(0, (checkoutItem?.price || 0) - discount);
-
-  const handleCheckout = async () => {
-    if (!checkoutItem || processing) return;
-    setProcessing(true);
-    setOrderError('');
-    try {
-      const res = await api.post('/orders/checkout', {
-        type: checkoutItem.type,
-        ...(checkoutItem.type === 'plan' ? { planId: checkoutItem._id } : { testSeriesId: checkoutItem._id }),
-        couponCode: couponInfo?.code || undefined,
-      });
-      const data = res.data;
-
-      // Offline mode (no Razorpay keys configured) — auto-verify
-      if (data.mode === 'offline' || !data.razorpayOrderId) {
-        const verify = await api.post('/orders/verify', {
-          orderId: data.orderId,
-          mode: 'offline',
-        });
-        await loadData();
-        setProcessing(false);
-        setCheckoutItem(null);
-        alert('Payment recorded successfully. Access unlocked! 🎉');
-        return;
-      }
-
-      // Real Razorpay flow
-      const Razorpay = await loadRazorpay();
-      if (!Razorpay) {
-        setOrderError('Payment gateway could not load. Please try again.');
-        setProcessing(false);
-        return;
-      }
-
-      const rzp = new Razorpay({
-        key_id: data.keyId,
-        amount: data.amount * 100,
-        currency: data.currency,
-        name: 'ExamOS',
-        description: `Order #${data.orderId}`,
-        order_id: data.razorpayOrderId,
-        handler: async (response: any) => {
-          try {
-            await api.post('/orders/verify', {
-              orderId: data.orderId,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature,
-              mode: 'razorpay',
-            });
-            await loadData();
-            setCheckoutItem(null);
-            alert('Payment successful! Access unlocked. 🎉');
-          } catch (err: any) {
-            setOrderError(err.message || 'Payment verification failed.');
-          }
-          setProcessing(false);
-        },
-        modal: {
-          ondismiss: () => setProcessing(false),
-        },
-        prefill: {
-          name: user?.name,
-          email: user?.email,
-        },
-        theme: { color: '#6366f1' },
-      });
-      rzp.open();
-    } catch (err: any) {
-      setOrderError(err.message || 'Checkout failed.');
-      setProcessing(false);
-    }
-  };
-
-  // Razorpay checkout script loader
-  const loadRazorpay = () => {
-    return new Promise<{ new (options: any): any }>((resolve) => {
-      if ((window as any).Razorpay) return resolve((window as any).Razorpay);
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve((window as any).Razorpay);
-      script.onerror = () => resolve(null as any);
-      document.body.appendChild(script);
-    });
-  };
-
-  const toggleEnroll = async (seriesId: string, currentlyEnrolled: boolean) => {
+  const toggleEnroll = async (seriesId: string) => {
     if (enrolling.has(seriesId)) return;
-    const ts = allTestSeries.find((t: any) => t._id === seriesId);
-    const isPaid = ts?.price > 0;
-    
-    // If paid test series and not enrolled, open checkout instead of direct enroll
-    if (!currentlyEnrolled && isPaid) {
-      openCheckout({ ...ts, type: 'test_series' });
-      return;
-    }
-    
+    const ts = enrolledSeries.find((t: any) => t._id === seriesId);
+    if (ts && ts.price > 0) return; // paid series can't be unenrolled
     setEnrolling(prev => new Set(prev).add(seriesId));
     try {
-      if (currentlyEnrolled) {
-        await api.delete(`/enrollments/unenroll/${seriesId}`);
-        setEnrolledIds(prev => { const n = new Set(prev); n.delete(seriesId); return n; });
-        setEnrolledSeries(prev => prev.filter((t: any) => t._id !== seriesId));
-      } else {
-        await api.post(`/enrollments/enroll/${seriesId}`, {});
-        setEnrolledIds(prev => new Set(prev).add(seriesId));
-        if (ts) setEnrolledSeries(prev => [...prev, ts]);
-      }
+      await api.delete(`/enrollments/unenroll/${seriesId}`);
+      setEnrolledIds(prev => { const n = new Set(prev); n.delete(seriesId); return n; });
+      setEnrolledSeries(prev => prev.filter((t: any) => t._id !== seriesId));
     } catch {}
     setEnrolling(prev => { const n = new Set(prev); n.delete(seriesId); return n; });
   };
@@ -367,8 +213,6 @@ export default function StudentDashboard() {
     }
     setLoadingTests(false);
   };
-
-  const isSearching = searchQuery.trim().length > 0;
 
   function renderTestSeriesCard(ts: any, isEnrolled: boolean) {
     const isBusy = enrolling.has(ts._id);
@@ -411,20 +255,26 @@ export default function StudentDashboard() {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleEnroll(ts._id, isEnrolled); }}
-              disabled={isBusy}
-              className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-                isEnrolled
-                  ? 'border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 bg-rose-500/5'
-                  : showBuy
-                  ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md shadow-amber-600/20'
-                  : 'bg-primary text-white hover:bg-primary/95 shadow-md shadow-primary/20'
-              } disabled:opacity-50`}
-            >
-              {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isEnrolled ? <XCircle className="w-3.5 h-3.5" /> : showBuy ? <Lock className="w-3.5 h-3.5" /> : <PlusCircle className="w-3.5 h-3.5" />}
-              {isBusy ? '' : isEnrolled ? 'Unenroll' : showBuy ? 'Buy Full Series' : 'Enroll'}
-            </button>
+            {isEnrolled && isPaid ? (
+              <span className="px-4 py-2 rounded-xl text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 border border-violet-500/30 text-violet-600 bg-violet-500/5">
+                <CheckCircle className="w-3.5 h-3.5" /> Enrolled
+              </span>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleEnroll(ts._id); }}
+                disabled={isBusy}
+                className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  isEnrolled
+                    ? 'border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 bg-rose-500/5'
+                    : showBuy
+                    ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md shadow-amber-600/20'
+                    : 'bg-primary text-white hover:bg-primary/95 shadow-md shadow-primary/20'
+                } disabled:opacity-50`}
+              >
+                {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isEnrolled ? <XCircle className="w-3.5 h-3.5" /> : showBuy ? <Lock className="w-3.5 h-3.5" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                {isBusy ? '' : isEnrolled ? 'Unenroll' : showBuy ? 'Buy Full Series' : 'Enroll'}
+              </button>
+            )}
             <span className="text-xs text-muted-foreground font-semibold">{expandedSeriesId === ts._id ? '▲' : '▼'}</span>
           </div>
         </div>
@@ -506,6 +356,11 @@ export default function StudentDashboard() {
     );
   }
 
+  const totalHistoryPages = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE));
+  const safeHistoryPage = Math.min(historyPage, totalHistoryPages - 1);
+  const historyStart = safeHistoryPage * HISTORY_PAGE_SIZE;
+  const pagedHistory = history.slice(historyStart, historyStart + HISTORY_PAGE_SIZE);
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans transition-colors duration-300">
       
@@ -529,7 +384,7 @@ export default function StudentDashboard() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8 flex flex-col gap-8">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-6 pt-8 pb-40 md:pb-8 flex flex-col gap-8">
         
         {/* Quick Nav */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -553,6 +408,9 @@ export default function StudentDashboard() {
           </Link>
           <Link href="/profile" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
             <User className="w-3.5 h-3.5 text-sky-500" /> Profile
+          </Link>
+          <Link href="/performance" className="px-4 py-2 rounded-xl border border-primary/40 bg-primary/5 text-xs font-bold hover:bg-primary/10 transition-colors flex items-center gap-1.5">
+            <BarChart3 className="w-3.5 h-3.5 text-primary" /> My Performance
           </Link>
         </div>
         
@@ -591,12 +449,17 @@ export default function StudentDashboard() {
             {announcements.map((a: any) => {
               const accent = a.accentColor || '#6366f1';
               return (
-                <div key={a._id} className="flex items-start gap-3 p-4 rounded-2xl shadow-sm" style={{ border: `1px solid ${accent}33`, backgroundColor: `${accent}08` }}>
-                  <Megaphone className="w-5 h-5 shrink-0 mt-0.5" style={{ color: accent }} />
-                  <div className="flex-1">
+                <div key={a._id} className="group flex items-start gap-3 p-4 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-transform" style={{ border: `1px solid ${accent}33`, backgroundColor: `${accent}08` }}>
+                  <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center mt-0.5" style={{ backgroundColor: `${accent}15`, color: accent }}>
+                    <Megaphone className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-sm font-outfit">{a.title}</span>
-                      {a.type && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase" style={{ backgroundColor: `${accent}15`, color: accent }}>{a.type}</span>}
+                      <span className="relative flex w-2 h-2 mt-0.5" aria-hidden="true">
+                        <span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75 motion-reduce:animate-none" style={{ backgroundColor: accent }}></span>
+                        <span className="relative inline-flex rounded-full w-2 h-2" style={{ backgroundColor: accent }}></span>
+                      </span>
                     </div>
                     {a.message && <p className="text-xs text-muted-foreground mt-0.5">{a.message}</p>}
                   </div>
@@ -607,56 +470,56 @@ export default function StudentDashboard() {
         )}
 
         {/* Daily Goals Row */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="p-6 rounded-3xl border border-border bg-card flex items-center gap-4 relative overflow-hidden shadow-sm">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-lg"></div>
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center shadow-inner">
-              <Flame className="w-6 h-6 fill-rose-500" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+          <div className="p-4 sm:p-6 rounded-3xl border border-border bg-card flex items-center gap-3 sm:gap-4 relative overflow-hidden shadow-sm">
+            <div className="absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-rose-500/5 rounded-full blur-lg"></div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center shadow-inner shrink-0">
+              <Flame className="w-5 h-5 sm:w-6 sm:h-6 fill-rose-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-muted-foreground block">Current Streak</span>
-              <span className="text-2xl font-bold font-outfit text-rose-500">{dailyStats.streak}-Day Streak</span>
-              <span className="text-xs text-muted-foreground block mt-0.5">Keep learning daily!</span>
+              <span className="text-lg sm:text-2xl font-bold font-outfit text-rose-500">{dailyStats.streak}-Day Streak</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground block mt-0.5 truncate">Keep learning daily!</span>
             </div>
           </div>
-          <div className="p-6 rounded-3xl border border-border bg-card flex items-center gap-4 relative overflow-hidden shadow-sm">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-lg"></div>
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
-              <BookOpen className="w-6 h-6" />
+          <div className="p-4 sm:p-6 rounded-3xl border border-border bg-card flex items-center gap-3 sm:gap-4 relative overflow-hidden shadow-sm">
+            <div className="absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-primary/5 rounded-full blur-lg"></div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner shrink-0">
+              <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-muted-foreground block">Questions Today</span>
-              <span className="text-2xl font-bold font-outfit text-primary">{dailyStats.questionsToday} Qs</span>
-              <span className="text-xs text-muted-foreground block mt-0.5">Attempted today</span>
+              <span className="text-lg sm:text-2xl font-bold font-outfit text-primary">{dailyStats.questionsToday} Qs</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground block mt-0.5 truncate">Attempted today</span>
             </div>
           </div>
-          <div className="p-6 rounded-3xl border border-border bg-card flex items-center gap-4 relative overflow-hidden shadow-sm">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-lg"></div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shadow-inner">
-              <Clock className="w-6 h-6" />
+          <div className="p-4 sm:p-6 rounded-3xl border border-border bg-card flex items-center gap-3 sm:gap-4 relative overflow-hidden shadow-sm">
+            <div className="absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-emerald-500/5 rounded-full blur-lg"></div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shadow-inner shrink-0">
+              <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-muted-foreground block">Time Spent Today</span>
-              <span className="text-2xl font-bold font-outfit text-emerald-500">{Math.round(dailyStats.timeSpentToday / 60)} min</span>
-              <span className="text-xs text-muted-foreground block mt-0.5">Active practice time</span>
+              <span className="text-lg sm:text-2xl font-bold font-outfit text-emerald-500">{Math.round(dailyStats.timeSpentToday / 60)} min</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground block mt-0.5 truncate">Active practice time</span>
             </div>
           </div>
-          <Link href="/revision" className="p-6 rounded-3xl border border-border bg-card flex items-center gap-4 relative overflow-hidden hover:border-primary transition-all group shadow-sm">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-lg"></div>
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shadow-inner group-hover:bg-primary group-hover:text-white transition-colors">
-              <BrainCircuit className="w-6 h-6" />
+          <Link href="/revision" className="p-4 sm:p-6 rounded-3xl border border-border bg-card flex items-center gap-3 sm:gap-4 relative overflow-hidden hover:border-primary transition-all group shadow-sm">
+            <div className="absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-indigo-500/5 rounded-full blur-lg"></div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shadow-inner shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
+              <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-muted-foreground block">Avg Score</span>
-              <span className="text-2xl font-bold font-outfit text-indigo-500 group-hover:text-primary transition-colors">{Math.round(dailyStats.scoreAvg)}%</span>
-              <span className="text-xs text-primary font-bold block mt-0.5">Across all tests</span>
+              <span className="text-lg sm:text-2xl font-bold font-outfit text-indigo-500 group-hover:text-primary transition-colors">{Math.round(dailyStats.scoreAvg)}%</span>
+              <span className="text-[10px] sm:text-xs text-primary font-bold block mt-0.5 truncate">Across all tests</span>
             </div>
           </Link>
         </div>
 
-        {/* Members-only analytics upgrade prompt */}
+        {/* Members-only analytics upgrade prompt (desktop only — mobile bottom bar covers it) */}
         {analyticsLocked && (
-          <div className="p-6 rounded-3xl border border-amber-500/20 bg-amber-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="hidden md:flex p-6 rounded-3xl border border-amber-500/20 bg-amber-500/5 flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0"><Crown className="w-5 h-5" /></div>
               <div>
@@ -741,87 +604,43 @@ export default function StudentDashboard() {
               </div>
             )}
 
-            {/* Elastic Search Bar */}
-            <div className="relative">
-              <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl border border-border bg-card shadow-sm hover:border-primary/30 transition-all">
-                <Search className="w-5 h-5 text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search test series by title, exam, or tags..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/50"
-                />
-                {searching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                {searchQuery && !searching && (
-                  <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="text-muted-foreground hover:text-foreground text-xs font-semibold">
-                    Clear
-                  </button>
-                )}
+            {/* Explore Test Series */}
+            <Link
+              href="/test-series"
+              className="group p-5 rounded-3xl border border-border bg-card shadow-sm flex items-center justify-between gap-4 hover:border-primary/40 hover:shadow-md transition-all"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                  <Star className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-bold font-outfit">Recommended Test Series</h2>
+                  <p className="text-xs text-muted-foreground truncate">Browse recommended series & search for more</p>
+                </div>
               </div>
-            </div>
-
-            {/* Search Results Section */}
-            {isSearching && (
-              <div className="flex flex-col gap-4">
-                <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
-                  <Search className="w-5 h-5 text-primary" /> Search Results
-                  <span className="text-sm font-normal text-muted-foreground">({searchResults.length} found)</span>
-                </h2>
-                {searchResults.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-3xl bg-card">
-                    No test series match "{searchQuery}"
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {searchResults.map((ts) => renderTestSeriesCard(ts, enrolledIds.has(ts._id)))}
-                  </div>
-                )}
-              </div>
-            )}
+              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
+            </Link>
 
             {/* Enrolled Section */}
-            {!isSearching && (
-              <div className="flex flex-col gap-4">
-                <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-violet-500" /> Your Enrolled Test Series
-                </h2>
-                {enrolledSeries.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-3xl bg-card flex flex-col items-center gap-2">
-                    <UserCheck className="w-8 h-8 text-muted-foreground/30" />
-                    <span>You haven't enrolled in any test series yet.</span>
-                    <span className="text-xs">Browse the recommended series below and enroll to get started!</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {enrolledSeries.map((ts) => renderTestSeriesCard(ts, true))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Recommended Section (only show when not searching) */}
-            {!isSearching && (
-              <div className="flex flex-col gap-4">
-                <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
-                  <Star className="w-5 h-5 text-amber-500" /> Recommended for You
-                </h2>
-                {recommendedSeries.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-3xl bg-card">
-                    {allTestSeries.length === 0
-                      ? 'No test series available yet.'
-                      : 'All available test series matching your preferences are already enrolled!'}
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {recommendedSeries.map((ts) => renderTestSeriesCard(ts, false))}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="flex flex-col gap-4">
+              <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-violet-500" /> Your Enrolled Test Series
+              </h2>
+              {enrolledSeries.length === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-3xl bg-card flex flex-col items-center gap-2">
+                  <UserCheck className="w-8 h-8 text-muted-foreground/30" />
+                  <span>You haven't enrolled in any test series yet.</span>
+                  <Link href="/test-series" className="text-xs font-bold text-primary hover:underline">Browse recommended test series →</Link>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {enrolledSeries.map((ts) => renderTestSeriesCard(ts, true))}
+                </div>
+              )}
+            </div>
 
             {/* Previous Attempts */}
-            <div className="flex flex-col gap-4">
+            <div id="submissions" className="flex flex-col gap-4 scroll-mt-24">
               <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-indigo-500" /> Previous Test Submissions
               </h2>
@@ -845,7 +664,7 @@ export default function StudentDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {history.map((h) => (
+                        {pagedHistory.map((h) => (
                           <tr key={h._id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
                             <td className="px-6 py-4 font-semibold">{h.testId?.title || 'Mock Test'}</td>
                             <td className="px-6 py-4 text-muted-foreground text-xs">
@@ -863,6 +682,30 @@ export default function StudentDashboard() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+                {history.length > HISTORY_PAGE_SIZE && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-border gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      Showing {historyStart + 1}–{Math.min(historyStart + HISTORY_PAGE_SIZE, history.length)} of {history.length} submissions
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}
+                        disabled={safeHistoryPage === 0}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" /> Prev
+                      </button>
+                      <span className="text-xs font-semibold text-muted-foreground">Page {safeHistoryPage + 1} of {totalHistoryPages}</span>
+                      <button
+                        onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages - 1, p + 1))}
+                        disabled={safeHistoryPage >= totalHistoryPages - 1}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Next <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -914,7 +757,7 @@ export default function StudentDashboard() {
             </div>
 
             {/* Recommendations */}
-            <div className="p-6 rounded-3xl border border-primary/20 bg-gradient-to-br from-card to-primary/5 flex flex-col gap-4 shadow-sm relative overflow-hidden">
+            <div id="recommendations" className="p-6 rounded-3xl border border-primary/20 bg-gradient-to-br from-card to-primary/5 flex flex-col gap-4 shadow-sm relative overflow-hidden scroll-mt-24">
               <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-full blur-md"></div>
               <h2 className="text-lg font-bold font-outfit flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-primary" /> Smart Recommendations
@@ -1018,13 +861,13 @@ export default function StudentDashboard() {
             )}
 
             {/* Infinite Practice */}
-            <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4 shadow-sm">
+            <div id="infinite-practice" className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4 shadow-sm scroll-mt-24">
               <h2 className="text-lg font-bold font-outfit flex items-center gap-2">
                 <BookMarked className="w-5 h-5 text-indigo-500" /> Infinite Practice Module
               </h2>
               <p className="text-xs text-muted-foreground">Select a subject to start a randomized adaptive session:</p>
               {subjects.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No subjects available yet. Add questions first.</p>
+                <p className="text-xs text-muted-foreground">Enroll in a test series to unlock practice subjects for it.</p>
               ) : (
                 subjects.slice(0, 6).map((s: string) => (
                   <Link key={s} href={`/practice?subject=${encodeURIComponent(s)}`}
@@ -1040,61 +883,67 @@ export default function StudentDashboard() {
 
       </main>
 
-      {/* Checkout Modal */}
-      {checkoutItem && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold font-outfit flex items-center gap-2">
-                <Lock className="w-5 h-5 text-primary" /> Checkout
-              </h3>
-              <button onClick={closeCheckout} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
-            </div>
+      {/* Mobile droplet quick-access bottom bar */}
+      <nav aria-label="Quick access" className="md:hidden fixed bottom-0 inset-x-0 z-50">
+        <div className="relative mx-2 mb-2 pb-[calc(env(safe-area-inset-bottom)+2px)]">
+          <Link
+            href="/plans"
+            aria-label="Buy Test Series – view plans"
+            className="absolute left-1/2 -translate-x-1/2 -top-7 z-10 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+          >
+            <span className="flex flex-col items-center gap-0.5">
+              <span className="w-14 h-14 rounded-full bg-gradient-to-tr from-primary to-accent text-white flex items-center justify-center shadow-lg shadow-primary/30 ring-4 ring-background animate-droplet">
+                <Crown className="w-6 h-6" aria-hidden="true" />
+              </span>
+              <span className="text-[9px] font-bold text-primary whitespace-nowrap">Buy Test Series</span>
+            </span>
+          </Link>
 
-            <div className="p-4 rounded-2xl border border-border bg-muted/20">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold">{checkoutItem.name || checkoutItem.title}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold">Test Series</span>
+          <div className="relative">
+            <svg viewBox="0 0 120 16" preserveAspectRatio="none" className="absolute inset-x-0 top-0 h-4 w-full pointer-events-none" aria-hidden="true">
+              <path d="M0 16 L0 0 L120 0 L120 16 Z M40 0 L48 16 L56 16 L64 0 Z" fillRule="evenodd" fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth="1.5" />
+            </svg>
+            <div className="rounded-t-[18px] rounded-b-2xl border border-border border-t-0 bg-card px-3 pt-7 pb-2 shadow-2xl shadow-black/20 flex items-end justify-between">
+              <div className="flex items-end gap-1">
+                <Link
+                  href="/test-series"
+                  className="flex flex-col items-center gap-1 w-16 py-1.5 rounded-xl hover:bg-secondary active:scale-95 transition-transform touch-manipulation [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label="Open Recommended Test Series page"
+                >
+                  <Star className="w-5 h-5 text-amber-500" aria-hidden="true" />
+                  <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">For You</span>
+                </Link>
+                <button
+                  onClick={() => scrollToSection('recommendations')}
+                  className="flex flex-col items-center gap-1 w-16 py-1.5 rounded-xl hover:bg-secondary active:scale-95 transition-transform touch-manipulation [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label="Go to Smart Recommendations section"
+                >
+                  <Sparkles className="w-5 h-5 text-primary" aria-hidden="true" />
+                  <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">Smart Recs</span>
+                </button>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <IndianRupee className="w-4 h-4 text-muted-foreground" />
-                <span className="text-2xl font-black font-outfit">₹{checkoutItem.price}</span>
+              <div className="flex items-end gap-1">
+                <button
+                  onClick={() => scrollToSection('infinite-practice')}
+                  className="flex flex-col items-center gap-1 w-16 py-1.5 rounded-xl hover:bg-secondary active:scale-95 transition-transform touch-manipulation [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label="Go to Infinite Practice section"
+                >
+                  <BookMarked className="w-5 h-5 text-indigo-500" aria-hidden="true" />
+                  <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">Practice</span>
+                </button>
+                <button
+                  onClick={() => scrollToSection('submissions')}
+                  className="flex flex-col items-center gap-1 w-16 py-1.5 rounded-xl hover:bg-secondary active:scale-95 transition-transform touch-manipulation [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label="Go to Previous Test Submissions section"
+                >
+                  <ClipboardList className="w-5 h-5 text-indigo-500" aria-hidden="true" />
+                  <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">My Tests</span>
+                </button>
               </div>
             </div>
-
-            {/* Coupon */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1"><Ticket className="w-3.5 h-3.5" /> Coupon Code</label>
-              <div className="flex gap-2">
-                <input
-                  type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  placeholder="Enter coupon" className="flex-1 px-4 py-3 rounded-xl border border-border bg-background text-sm font-bold tracking-wider uppercase"
-                />
-                <button onClick={applyCoupon} className="px-4 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95">Apply</button>
-              </div>
-              {couponInfo && <p className="text-[11px] text-emerald-500 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {couponInfo.code} applied — you save ₹{couponInfo.discount}</p>}
-              {couponError && <p className="text-[11px] text-rose-500 font-semibold">{couponError}</p>}
-            </div>
-
-            <div className="flex flex-col gap-1.5 border-t border-border pt-4 text-sm">
-              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{checkoutItem.price}</span></div>
-              {discount > 0 && <div className="flex justify-between text-emerald-500"><span>Discount</span><span>-₹{discount}</span></div>}
-              <div className="flex justify-between font-bold text-lg"><span>Total</span><span>₹{payable}</span></div>
-            </div>
-
-            {orderError && <p className="text-xs text-rose-500 font-semibold p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">{orderError}</p>}
-
-            <button
-              onClick={handleCheckout}
-              disabled={processing}
-              className="w-full py-3.5 rounded-xl bg-primary text-white font-bold hover:bg-primary/95 text-sm flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Lock className="w-4 h-4" /> Pay ₹{payable} Securely</>}
-            </button>
-            <p className="text-[10px] text-muted-foreground text-center">Payments processed securely via Razorpay</p>
           </div>
         </div>
-      )}
+      </nav>
 
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground mt-auto">
         Powered by ExamOS CBT Engine. All algorithms run locally.

@@ -32,11 +32,19 @@ export default function CbtEngine() {
   
   // Submit Warning Dialog State
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
   // Timer Reference
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Keeps the currently viewed question index available to the 1s timer
+  const currentIndexRef = useRef(0);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+
+  // Tracks whether an auto-submit is waiting to retry once the connection is back
+  const pendingSubmitRef = useRef(false);
 
   // Ref for fullscreen auto-submit (avoids stale closures in event listener)
   const fsCtxRef = useRef({ test: null as any, isPreview: false, attempt: null as any, autoSubmit: async () => {} });
@@ -131,6 +139,14 @@ export default function CbtEngine() {
     }
   };
 
+  // Exit Fullscreen after submission
+  const exitFullscreen = () => {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setIsFullscreen(false);
+  };
+
   // Keyboard Shortcuts Hook
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -154,11 +170,27 @@ export default function CbtEngine() {
         e.preventDefault();
         handleMarkForReview();
       }
+
+      // Escape → leave reminder
+      if (e.key === 'Escape') {
+        setShowLeaveModal(true);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, attempt, loading, selectedAnswers]);
+
+  // Intercept browser back navigation → show leave reminder, keep user on the page
+  useEffect(() => {
+    const handlePopState = () => {
+      if (loading || !attempt) return;
+      setShowLeaveModal(true);
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [loading, attempt]);
 
   // Countdown timer clock
   useEffect(() => {
@@ -195,6 +227,16 @@ export default function CbtEngine() {
         }
         return next;
       });
+
+      // Track time spent on the currently viewed question (feeds "time spent today")
+      setAttempt((a: any) => {
+        if (!a?.answers || !a.answers.length) return a;
+        const idx = currentIndexRef.current;
+        if (idx < 0 || idx >= a.answers.length) return a;
+        const answers = [...a.answers];
+        answers[idx] = { ...answers[idx], timeSpent: (answers[idx].timeSpent || 0) + 1 };
+        return { ...a, answers };
+      });
     }, 1000);
 
     // Background HTTP saving task (runs every 30s)
@@ -220,13 +262,14 @@ export default function CbtEngine() {
     }));
   };
 
-  const triggerBackgroundSync = async (secondsForce?: number) => {
-    if (!attempt || !isOnline) return;
+  const triggerBackgroundSync = async (secondsForce?: number, attemptOverride?: any) => {
+    const syncAttempt = attemptOverride || attempt;
+    if (!syncAttempt) return;
     setSyncStatus('pending');
     try {
-      await api.put(`/attempts/${attempt._id}/save`, {
-        answers: attempt.answers.map((a: any) => ({
-          questionId: a.questionId._id,
+      await api.put(`/attempts/${syncAttempt._id}/save`, {
+        answers: syncAttempt.answers.map((a: any) => ({
+          questionId: a.questionId?._id || a.questionId,
           selectedAnswer: a.selectedAnswer,
           status: a.status,
           timeSpent: a.timeSpent
@@ -261,20 +304,43 @@ export default function CbtEngine() {
   const handleOptionClick = (key: string) => {
     const qType = attempt.answers[currentIndex].questionId.type;
     
+    let next: string[];
     if (qType === 'Multiple Correct') {
-      if (selectedAnswers.includes(key)) {
-        setSelectedAnswers(selectedAnswers.filter(ans => ans !== key));
-      } else {
-        setSelectedAnswers([...selectedAnswers, key]);
-      }
+      next = selectedAnswers.includes(key)
+        ? selectedAnswers.filter(ans => ans !== key)
+        : [...selectedAnswers, key];
     } else {
       // Single correct or True/False
-      setSelectedAnswers([key]);
+      next = [key];
+    }
+    setSelectedAnswers(next);
+
+    // Auto-save: persist selection into attempt.answers immediately so
+    // background sync / refresh / auto-submit never lose it.
+    if (attempt?.answers?.[currentIndex]) {
+      const updatedAnswers = [...attempt.answers];
+      updatedAnswers[currentIndex] = {
+        ...updatedAnswers[currentIndex],
+        selectedAnswer: next,
+        status: next.length > 0 ? 'Answered' : 'Not Answered',
+      };
+      setAttempt({ ...attempt, answers: updatedAnswers });
     }
   };
 
   const handleNumericalChange = (val: string) => {
     setSelectedAnswers([val]);
+
+    // Auto-save: persist numeric answer into attempt.answers immediately.
+    if (attempt?.answers?.[currentIndex]) {
+      const updatedAnswers = [...attempt.answers];
+      updatedAnswers[currentIndex] = {
+        ...updatedAnswers[currentIndex],
+        selectedAnswer: [val],
+        status: val ? 'Answered' : 'Not Answered',
+      };
+      setAttempt({ ...attempt, answers: updatedAnswers });
+    }
   };
 
   const handleSaveAndNext = async () => {
@@ -324,44 +390,65 @@ export default function CbtEngine() {
     setAttempt({ ...attempt, answers: updatedAnswers });
   };
 
-  // Submit test
+  // Submit the attempt (final sync → POST → results). Returns true on success;
+  // on failure marks a pending submit so it can retry when back online.
+  const doSubmit = async (a: any, onSuccess?: () => void) => {
+    try {
+      // Final sync so the latest selections reach the server before submit
+      await triggerBackgroundSync(undefined, a);
+      const res = await api.post(`/attempts/${a._id}/submit`, {});
+      localStorage.removeItem(`cbt-attempt-${a._id}`);
+      pendingSubmitRef.current = false;
+      onSuccess?.();
+      // End fullscreen mode after submission
+      exitFullscreen();
+      router.push(`/cbt/results/${res.data._id}`);
+      return true;
+    } catch (err) {
+      console.error('Failed to submit exam', err);
+      const e: any = err;
+      if (e?.status === 400) {
+        setErrorMessage(e?.message || 'Unable to submit the test. Please try again.');
+      }
+      pendingSubmitRef.current = true;
+      return false;
+    }
+  };
+
+  // Manual submit
   const handleFinalSubmit = async () => {
     if (!attempt) return;
     setLoading(true);
-    try {
-      // Final sync save
-      await triggerBackgroundSync(timeLeft);
-      
-      const res = await api.post(`/attempts/${attempt._id}/submit`, {});
-      
+    const ok = await doSubmit(attempt, () => {
       // Fire confetti animation
       confetti({
         particleCount: 150,
         spread: 80,
         origin: { y: 0.6 }
       });
-
-      // Clear local storage cache
-      localStorage.removeItem(`cbt-attempt-${attempt._id}`);
-
-      router.push(`/cbt/results/${res.data._id}`);
-    } catch (err) {
-      console.error('Failed to submit exam', err);
-      setLoading(false);
-    }
+    });
+    if (!ok) setLoading(false);
   };
 
+  // Auto-submit when time runs out (or fullscreen is exited on a locked test)
   const handleAutoSubmit = async () => {
     const a = fsCtxRef.current.attempt;
     if (!a) return;
-    try {
-      await api.post(`/attempts/${a._id}/submit`, {});
-      localStorage.removeItem(`cbt-attempt-${a._id}`);
-      router.push(`/cbt/results/${a._id}`);
-    } catch (err) {
-      router.push('/dashboard');
-    }
+    await doSubmit(a);
   };
+
+  // When the connection comes back, flush responses saved while offline,
+  // or retry a pending submit that failed while offline.
+  useEffect(() => {
+    if (!isOnline) return;
+    const a = fsCtxRef.current.attempt;
+    if (!a) return;
+    if (pendingSubmitRef.current) {
+      doSubmit(a);
+    } else {
+      triggerBackgroundSync(undefined, a);
+    }
+  }, [isOnline]);
 
   // Format seconds into HH:MM:SS
   const formatTime = (seconds: number) => {
@@ -490,7 +577,7 @@ export default function CbtEngine() {
           <div className="flex items-center gap-3 bg-rose-500/15 text-rose-400 border border-rose-500/20 px-4 py-2 rounded-xl font-mono">
             <span className="text-xs font-semibold uppercase tracking-wider">Time Left:</span>
             <span className="text-xl font-bold">{formatTime(timeLeft)}</span>
-            {attempt.activeSectionIndex !== undefined && sectionTimeLeft[attempt.activeSectionIndex] > 0 && (
+            {test.sections.length > 1 && attempt.activeSectionIndex !== undefined && sectionTimeLeft[attempt.activeSectionIndex] > 0 && (
               <span className="text-xs text-rose-300 border-l border-rose-500/20 pl-3">
                 Section: {formatTime(sectionTimeLeft[attempt.activeSectionIndex])}
               </span>
@@ -512,7 +599,8 @@ export default function CbtEngine() {
         {/* Left Side: Question Pane */}
         <div className="lg:col-span-3 flex flex-col overflow-y-auto p-6 md:p-8">
           
-          {/* Section Selector */}
+          {/* Section Selector (only when multiple sections) */}
+          {test.sections.length > 1 && (
           <div className="flex items-center gap-2 border-b border-border pb-4 mb-6">
             {test.sections.map((sec: any, idx: number) => {
               const secRemaining = sectionTimeLeft[idx];
@@ -542,6 +630,7 @@ export default function CbtEngine() {
               );
             })}
           </div>
+          )}
 
           {/* Question display */}
           <div className="flex-1 flex flex-col gap-6">
@@ -549,8 +638,7 @@ export default function CbtEngine() {
               <div className="p-8 text-center text-muted-foreground text-sm border border-border rounded-3xl bg-card">Question data not available.</div>
             ) : (
               <>
-            <div className="flex justify-between items-center text-xs text-muted-foreground">
-              <span>Question Type: <strong>{currentQuestion.type}</strong></span>
+            <div className="flex justify-end items-center text-xs text-muted-foreground">
               <div className="flex gap-4">
                 <span className="text-emerald-500 font-semibold">Marks: +{currentQuestion.marks ?? 1}</span>
                 <span className="text-rose-500 font-semibold">Negative: -{currentQuestion.negativeMarks ?? 0}</span>
@@ -565,21 +653,7 @@ export default function CbtEngine() {
 
             {/* Answer Options Selector */}
             <div className="flex flex-col gap-3 mt-4">
-              {['Integer', 'Numerical'].includes(currentQuestion.type) ? (
-                <div className="p-6 rounded-3xl border border-border bg-card">
-                  <label className="text-xs font-semibold text-muted-foreground block mb-2">Type your numeric answer here:</label>
-                  <input 
-                    type="number"
-                    step="any"
-                    value={selectedAnswers[0] || ''}
-                    onChange={(e) => handleNumericalChange(e.target.value)}
-                    placeholder="E.g., 60 or 15.5"
-                    className="w-full max-w-xs px-4 py-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
-                  />
-                </div>
-              ) : !currentQuestion.options?.length ? (
-                <div className="p-6 rounded-3xl border border-border bg-card text-center text-sm text-muted-foreground">No options available for this question.</div>
-              ) : (
+              {currentQuestion.options?.length ? (
                 currentQuestion.options.map((opt: any) => {
                   const isSelected = selectedAnswers.includes(opt.key);
                   return (
@@ -603,6 +677,20 @@ export default function CbtEngine() {
                     </button>
                   );
                 })
+              ) : ['Integer', 'Numerical'].includes(currentQuestion.type) ? (
+                <div className="p-6 rounded-3xl border border-border bg-card">
+                  <label className="text-xs font-semibold text-muted-foreground block mb-2">Type your numeric answer here:</label>
+                  <input 
+                    type="number"
+                    step="any"
+                    value={selectedAnswers[0] || ''}
+                    onChange={(e) => handleNumericalChange(e.target.value)}
+                    placeholder="E.g., 60 or 15.5"
+                    className="w-full max-w-xs px-4 py-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                  />
+                </div>
+              ) : (
+                <div className="p-6 rounded-3xl border border-border bg-card text-center text-sm text-muted-foreground">No options available for this question.</div>
               )}
             </div>
               </>
@@ -700,6 +788,37 @@ export default function CbtEngine() {
         </div>
 
       </div>
+
+      {/* Leave Reminder Modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 text-center">
+          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col items-center gap-4">
+            <div className="p-3.5 rounded-full bg-rose-500/10 text-rose-500">
+              <AlertTriangle className="w-10 h-10 animate-pulse" />
+            </div>
+
+            <h3 className="text-xl font-bold font-outfit">Leaving the test?</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              If you go back now, your test will be <strong>submitted automatically</strong> and this attempt will be <strong>counted</strong>.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 w-full mt-6">
+              <button 
+                onClick={() => setShowLeaveModal(false)}
+                className="py-3 rounded-xl border border-border hover:bg-muted font-semibold text-sm transition-colors"
+              >
+                Continue Test
+              </button>
+              <button 
+                onClick={handleFinalSubmit}
+                className="py-3 rounded-xl bg-rose-500 text-white font-bold hover:bg-rose-600 transition-all text-sm shadow-md shadow-rose-500/20"
+              >
+                Submit &amp; Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Submit Warning Modal */}
       {showSubmitModal && (

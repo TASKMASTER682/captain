@@ -22,7 +22,7 @@ function PracticeContent() {
 
   // Fetch available subjects on mount
   useEffect(() => {
-    api.get('/questions/subjects').then(res => setSubjects(res.data || [])).catch(() => {});
+    api.get('/practice/subjects').then(res => setSubjects(res.data || [])).catch(() => {});
   }, []);
   
   // Practice Session States

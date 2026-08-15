@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { Inter, Outfit, Playfair_Display } from 'next/font/google';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ReactQueryProvider } from '@/components/ReactQueryProvider';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import ErrorReporter from '@/components/ErrorReporter';
+import AnalyticsTracker from '@/components/AnalyticsTracker';
 import './globals.css';
 
 const inter = Inter({
@@ -57,11 +60,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${outfit.variable} ${playfair.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col background text-foreground">
-        <ReactQueryProvider>
-          <ThemeProvider>
-            {children}
-          </ThemeProvider>
-        </ReactQueryProvider>
+        <ErrorBoundary>
+          <ReactQueryProvider>
+            <ThemeProvider>
+              {children}
+            </ThemeProvider>
+          </ReactQueryProvider>
+        </ErrorBoundary>
+        <ErrorReporter />
+        <AnalyticsTracker />
       </body>
     </html>
   );

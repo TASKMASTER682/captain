@@ -562,7 +562,7 @@ function LoginForm() {
       </div>
 
       <a
-        href={`${typeof window !== 'undefined' ? 'http://localhost:5000' : 'http://localhost:5000'}/api/auth/google`}
+        href={`/api/auth/google`}
         className="w-full py-3 rounded-xl border border-border bg-card hover:bg-muted text-sm font-medium flex items-center justify-center gap-2.5 transition-all"
       >
         <svg className="w-4 h-4" viewBox="0 0 24 24">

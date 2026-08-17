@@ -178,9 +178,7 @@ export default function Home() {
       {/* Header Navigation */}
       <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-primary/20">
-            Ω
-          </div>
+          <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-lg shadow-primary/20 object-cover" />
           <span className="font-bold text-2xl tracking-tight bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent font-outfit">
             ExamOS
           </span>
@@ -728,7 +726,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-4 gap-10">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white font-bold shadow-md shadow-primary/20">Ω</div>
+              <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
               <span className="font-bold text-xl font-outfit">ExamOS</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">
@@ -753,6 +751,12 @@ export default function Home() {
         </div>
         <div className="border-t border-border py-6 text-center text-xs text-muted-foreground">
           © 2026 ExamOS Inc. All rights reserved. Made for enterprise-scale CBT examination training.
+          <div className="mt-2 space-x-4">
+            <a href="/disclaimer" className="text-primary hover:text-primary/90 transition-colors text-[10px] mr-4">Disclaimer</a>
+            <a href="/terms-and-conditions" className="text-primary hover:text-primary/90 transition-colors text-[10px] mr-4">Terms</a>
+            <a href="/privacy-policy" className="text-primary hover:text-primary/90 transition-colors text-[10px] mr-4">Privacy</a>
+            <a href="/refund-cancellation" className="text-primary hover:text-primary/90 transition-colors text-[10px]">Refund</a>
+          </div>
         </div>
       </footer>
     </div>

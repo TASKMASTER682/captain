@@ -33,6 +33,11 @@ export const metadata: Metadata = {
   },
   description: 'Enterprise-grade assessment operating system for competitive exams. Speed analytics, recommendation engine, spaced repetition revision, and original government-standard CBT engine.',
   keywords: ['CBT', 'competitive exams', 'online test series', 'exam preparation', 'mock tests', 'ExamOS'],
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
   robots: {
     index: true,
     follow: true,
@@ -43,11 +48,13 @@ export const metadata: Metadata = {
     siteName: 'ExamOS',
     title: 'ExamOS - Premium CBT Operating System for Competitive Exams',
     description: 'Enterprise-grade assessment operating system for competitive exams. Speed analytics, recommendation engine, spaced repetition revision, and original government-standard CBT engine.',
+    images: [{ url: '/logo.png', alt: 'ExamOS' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ExamOS - Premium CBT Operating System for Competitive Exams',
     description: 'Enterprise-grade assessment operating system for competitive exams.',
+    images: ['/logo.png'],
   },
   alternates: { canonical: '/' },
 };

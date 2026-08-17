@@ -12,7 +12,7 @@ import {
   AlertCircle, History, Filter, Building2, GraduationCap, 
   Layers, UserCog, ChevronDown, ChevronUp, RefreshCw,
   HelpCircle, IndianRupee, ShoppingCart, Ticket,
-  Megaphone, Activity, ClipboardList, ScrollText, CreditCard, Newspaper, Star, Bug, BarChart3
+  Megaphone, Activity, ClipboardList, ScrollText, Newspaper, Star, Bug, BarChart3
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans transition-colors duration-300">
       <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white font-bold text-lg shadow-md shadow-primary/20">Ω</div>
+          <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
           <span className="font-bold text-xl tracking-tight font-outfit">ExamOS Management</span>
         </div>
         <div className="flex items-center gap-4">
@@ -245,7 +245,6 @@ export default function AdminDashboard() {
               { href: '/admin/coupons', icon: Ticket, label: 'Coupons', color: 'text-pink-500 bg-pink-500/10' },
               { href: '/admin/plans', icon: Star, label: 'Plans / Subscriptions', color: 'text-amber-500 bg-amber-500/10' },
               { href: '/admin/announcements', icon: Megaphone, label: 'Announcements', color: 'text-sky-500 bg-sky-500/10' },
-              { href: '/admin/razorpay', icon: CreditCard, label: 'Razorpay Settings', color: 'text-rose-500 bg-rose-500/10' },
               { href: '/admin/attempts', icon: ClipboardList, label: 'Student Attempts', color: 'text-violet-500 bg-violet-500/10' },
               { href: '/admin/audit-logs', icon: ScrollText, label: 'Audit Logs', color: 'text-indigo-500 bg-indigo-500/10' },
               { href: '/admin/materials', icon: FileText, label: 'Study Materials', color: 'text-emerald-500 bg-emerald-500/10' },

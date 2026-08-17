@@ -8,18 +8,7 @@ import {
   Check, ArrowLeft, ShoppingCart, Ticket, Copy, CheckCircle2,
   Lock, Sparkles, RefreshCw, Loader2, Gift, IndianRupee, CreditCard, X, Crown, Target
 } from 'lucide-react';
-
-// Razorpay checkout script loader
-  const loadRazorpay = () => {
-    return new Promise<{ new (options: any): any }>((resolve) => {
-      if ((window as any).Razorpay) return resolve((window as any).Razorpay);
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve((window as any).Razorpay);
-      script.onerror = () => resolve(null as any);
-      document.body.appendChild(script);
-    });
-  };
+import QrPayment from '@/components/QrPayment';
 
 export default function PlansPage() {
   const router = useRouter();
@@ -36,6 +25,7 @@ export default function PlansPage() {
   const [processing, setProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [orderError, setOrderError] = useState('');
+  const [qrPayment, setQrPayment] = useState<any>(null);
 
   useEffect(() => {
     const activeUser = getAuthUser();
@@ -115,52 +105,12 @@ export default function PlansPage() {
         await loadData();
         setProcessing(false);
         setCheckoutItem(null);
-        alert('Payment recorded successfully. Access unlocked! 🎉');
+        alert('Payment recorded successfully. Access unlocked!');
         return;
       }
 
-      // Real Razorpay flow
-      const Razorpay = await loadRazorpay();
-      if (!Razorpay) {
-        setOrderError('Payment gateway could not load. Please try again.');
-        setProcessing(false);
-        return;
-      }
-
-      const rzp = new Razorpay({
-        key_id: data.keyId,
-        amount: data.amount * 100,
-        currency: data.currency,
-        name: 'ExamOS',
-        description: `Order #${data.orderId}`,
-        order_id: data.razorpayOrderId,
-        handler: async (response: any) => {
-          try {
-            await api.post('/orders/verify', {
-              orderId: data.orderId,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature,
-              mode: 'razorpay',
-            });
-            await loadData();
-            setCheckoutItem(null);
-            alert('Payment successful! Access unlocked. 🎉');
-          } catch (err: any) {
-            setOrderError(err.message || 'Payment verification failed.');
-          }
-          setProcessing(false);
-        },
-        modal: {
-          ondismiss: () => setProcessing(false),
-        },
-        prefill: {
-          name: user?.name,
-          email: user?.email,
-        },
-        theme: { color: '#6366f1' },
-      });
-      rzp.open();
+      setProcessing(false);
+      setQrPayment(data);
     } catch (err: any) {
       setOrderError(err.message || 'Checkout failed.');
       setProcessing(false);
@@ -366,8 +316,35 @@ export default function PlansPage() {
         )}
       </main>
 
+      {/* QR Payment Modal */}
+      {qrPayment && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold font-outfit">Scan & Pay</h3>
+              <button onClick={() => { setQrPayment(null); setCheckoutItem(null); }} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
+            </div>
+            <QrPayment
+              orderId={qrPayment.orderId}
+              razorpayOrderId={qrPayment.razorpayOrderId}
+              upiString={qrPayment.upiString}
+              merchantVpa={qrPayment.merchantVpa}
+              amount={qrPayment.amount}
+              itemName={qrPayment.item.name}
+              onSuccess={async () => {
+                setQrPayment(null);
+                setCheckoutItem(null);
+                await loadData();
+                alert('Payment successful! Access unlocked.');
+              }}
+              onCancel={() => { setQrPayment(null); setCheckoutItem(null); setProcessing(false); }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Checkout Modal */}
-      {checkoutItem && (
+      {checkoutItem && !qrPayment && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
             <div className="flex justify-between items-center">
@@ -419,9 +396,9 @@ export default function PlansPage() {
               disabled={processing}
               className="w-full py-3.5 rounded-xl bg-primary text-white font-bold hover:bg-primary/95 text-sm flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Lock className="w-4 h-4" /> Pay ₹{payable} Securely</>}
+              {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Lock className="w-4 h-4" /> Pay ₹{payable}</>}
             </button>
-            <p className="text-[10px] text-muted-foreground text-center">Payments processed securely via Razorpay</p>
+            <p className="text-[10px] text-muted-foreground text-center">UPI payment via Razorpay</p>
           </div>
         </div>
       )}

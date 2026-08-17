@@ -367,7 +367,7 @@ export default function StudentDashboard() {
       {/* Header */}
       <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white font-bold text-lg shadow-md shadow-primary/20">Ω</div>
+          <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
           <span className="font-bold text-xl tracking-tight font-outfit">Dashboard</span>
         </div>
         <div className="flex items-center gap-4">

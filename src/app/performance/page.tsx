@@ -93,7 +93,7 @@ export default function PerformancePage() {
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white font-bold text-lg shadow-md shadow-primary/20">Ω</div>
+            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
             <span className="font-bold text-xl tracking-tight font-outfit">My Performance</span>
           </div>
         </div>

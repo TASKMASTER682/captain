@@ -7,15 +7,15 @@ import { api, clearAuth, getAuthUser } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   Search, Loader2, LogOut, Sun, Moon, Star, CreditCard, Lock, CheckCircle,
-  XCircle, PlusCircle, Clock, Play, ChevronLeft, Ticket, CheckCircle2, IndianRupee, X
+  XCircle, PlusCircle, Clock, Play, ChevronLeft, Ticket, CheckCircle2, IndianRupee, X,
 } from 'lucide-react';
+import QrPayment from '@/components/QrPayment';
 
 export default function TestSeriesPage() {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
 
   const [user, setUser] = useState<any>(null);
-
   const [allTestSeries, setAllTestSeries] = useState<any[]>([]);
   const [enrolledSeries, setEnrolledSeries] = useState<any[]>([]);
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
@@ -31,8 +31,19 @@ export default function TestSeriesPage() {
   const [couponError, setCouponError] = useState('');
   const [processing, setProcessing] = useState(false);
   const [orderError, setOrderError] = useState('');
+  const [qrPayment, setQrPayment] = useState<any>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
+
+  // --- NEW: Difficulty preference state ---
+  const [difficulty, setDifficulty] = useState<'hard' | 'mix' | 'easy'>(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('examos_difficulty') : null;
+    return stored as 'hard' | 'mix' | 'easy' || 'mix';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('examos_difficulty', difficulty); } catch {}
+  }, [difficulty]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -58,16 +69,18 @@ export default function TestSeriesPage() {
     setLoading(false);
   }, []);
 
-  // Compute recommended series (matching user's exam preferences, not enrolled)
+  // Compute recommended series (matching user's exam preferences + difficulty, not enrolled)
   const recommendedSeries = useMemo(() => {
     const userExamIds = user?.exams || [];
+    const userDifficulty = difficulty;
     return allTestSeries.filter((ts: any) => {
       const examId = ts.examId?._id || ts.examId;
       const matchesExam = userExamIds.length === 0 || userExamIds.includes(examId);
+      const matchesDifficulty = !userDifficulty || ts.difficulty === userDifficulty;
       const notEnrolled = !enrolledIds.has(ts._id);
-      return matchesExam && notEnrolled;
+      return matchesExam && matchesDifficulty && notEnrolled;
     });
-  }, [allTestSeries, enrolledIds, user]);
+  }, [allTestSeries, enrolledIds, user, difficulty]);
 
   // Elastic search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -163,69 +176,18 @@ export default function TestSeriesPage() {
         await loadData();
         setProcessing(false);
         setCheckoutItem(null);
-        alert('Payment recorded successfully. Access unlocked! 🎉');
+        alert('Payment recorded successfully. Access unlocked!');
         return;
       }
 
-      // Real Razorpay flow
-      const Razorpay = await loadRazorpay();
-      if (!Razorpay) {
-        setOrderError('Payment gateway could not load. Please try again.');
-        setProcessing(false);
-        return;
-      }
-
-      const rzp = new Razorpay({
-        key_id: data.keyId,
-        amount: data.amount * 100,
-        currency: data.currency,
-        name: 'ExamOS',
-        description: `Order #${data.orderId}`,
-        order_id: data.razorpayOrderId,
-        handler: async (response: any) => {
-          try {
-            await api.post('/orders/verify', {
-              orderId: data.orderId,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature,
-              mode: 'razorpay',
-            });
-            await loadData();
-            setCheckoutItem(null);
-            alert('Payment successful! Access unlocked. 🎉');
-          } catch (err: any) {
-            setOrderError(err.message || 'Payment verification failed.');
-          }
-          setProcessing(false);
-        },
-        modal: {
-          ondismiss: () => setProcessing(false),
-        },
-        prefill: {
-          name: user?.name,
-          email: user?.email,
-        },
-        theme: { color: '#6366f1' },
-      });
-      rzp.open();
+      setProcessing(false);
+      setQrPayment(data);
     } catch (err: any) {
       setOrderError(err.message || 'Checkout failed.');
       setProcessing(false);
     }
   };
 
-  // Razorpay checkout script loader
-  const loadRazorpay = () => {
-    return new Promise<{ new (options: any): any }>((resolve) => {
-      if ((window as any).Razorpay) return resolve((window as any).Razorpay);
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve((window as any).Razorpay);
-      script.onerror = () => resolve(null as any);
-      document.body.appendChild(script);
-    });
-  };
 
   const toggleEnroll = async (seriesId: string, currentlyEnrolled: boolean) => {
     if (enrolling.has(seriesId)) return;
@@ -317,7 +279,7 @@ export default function TestSeriesPage() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {isEnrolled && isPaid ? (
-              <span className="px-4 py-2 rounded-xl text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 border border-violet-500/30 text-violet-600 bg-violet-500/5">
+              <span className="px-4 py-2 rounded-xl text-[11px] font-bold whitespace-nowrap flex items-center gap-1 border border-violet-500/30 text-violet-600 bg-violet-500/5">
                 <CheckCircle className="w-3.5 h-3.5" /> Enrolled
               </span>
             ) : (
@@ -430,7 +392,7 @@ export default function TestSeriesPage() {
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white font-bold text-lg shadow-md shadow-primary/20">Ω</div>
+            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
             <span className="font-bold text-xl tracking-tight font-outfit">Test Series</span>
           </div>
         </div>
@@ -449,6 +411,38 @@ export default function TestSeriesPage() {
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-8">
+
+        {/* Difficulty Filter Bar - NEW */}
+        <div className="flex flex-wrap items-center gap-3 px-6 py-3 rounded-2xl border border-border bg-card shadow-sm mb-6">
+          <span className="text-sm text-muted-foreground font-medium">Difficulty Level</span>
+          <button
+            onClick={() => setDifficulty('easy')}
+            className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+              difficulty === 'easy' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'text-muted-foreground hover:bg-emerald-100'
+            }`}
+            title="Easy"
+          >
+            <Sun className="w-3.5 h-3.5 text-emerald-400" /> Easy
+          </button>
+          <button
+            onClick={() => setDifficulty('mix')}
+            className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+              difficulty === 'mix' ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20' : 'text-muted-foreground hover:bg-amber-100'
+            }`}
+            title="Mix"
+          >
+            <Moon className="w-3.5 h-3.5 text-amber-400" /> Mix
+          </button>
+          <button
+            onClick={() => setDifficulty('hard')}
+            className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+              difficulty === 'hard' ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20' : 'text-muted-foreground hover:bg-rose-100'
+            }`}
+            title="Hard"
+          >
+            <Star className="w-3.5 h-3.5 text-rose-400" /> Hard
+          </button>
+        </div>
 
         {/* Elastic Search Bar */}
         <div className="relative">
@@ -485,7 +479,7 @@ export default function TestSeriesPage() {
               </div>
             ) : searchResults.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-3xl bg-card">
-                No test series match &quot;{searchQuery}&quot;
+                No test series match "{searchQuery}"
               </div>
             ) : (
               <div className="flex flex-col gap-4">
@@ -515,8 +509,35 @@ export default function TestSeriesPage() {
 
       </main>
 
+      {/* QR Payment Modal */}
+      {qrPayment && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold font-outfit">Scan & Pay</h3>
+              <button onClick={() => { setQrPayment(null); setCheckoutItem(null); }} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
+            </div>
+            <QrPayment
+              orderId={qrPayment.orderId}
+              razorpayOrderId={qrPayment.razorpayOrderId}
+              upiString={qrPayment.upiString}
+              merchantVpa={qrPayment.merchantVpa}
+              amount={qrPayment.amount}
+              itemName={qrPayment.item.name}
+              onSuccess={async () => {
+                setQrPayment(null);
+                setCheckoutItem(null);
+                await loadData();
+                alert('Payment successful! Access unlocked.');
+              }}
+              onCancel={() => { setQrPayment(null); setCheckoutItem(null); setProcessing(false); }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Checkout Modal */}
-      {checkoutItem && (
+      {checkoutItem && !qrPayment && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
             <div className="flex justify-between items-center">
@@ -564,9 +585,9 @@ export default function TestSeriesPage() {
               disabled={processing}
               className="w-full py-3.5 rounded-xl bg-primary text-white font-bold hover:bg-primary/95 text-sm flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Lock className="w-4 h-4" /> Pay ₹{payable} Securely</>}
+              {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Lock className="w-4 h-4" /> Pay ₹{payable}</>}
             </button>
-            <p className="text-[10px] text-muted-foreground text-center">Payments processed securely via Razorpay</p>
+            <p className="text-[10px] text-muted-foreground text-center">UPI payment via Razorpay</p>
           </div>
         </div>
       )}

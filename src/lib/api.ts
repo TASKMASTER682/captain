@@ -1,17 +1,7 @@
 // API client for ExamOS — always talks to the real backend.
-// Set NEXT_PUBLIC_API_URL at build time (e.g. https://api.examos.com/api) in
-// production; leaving it unset falls back to localhost for local development.
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+// API_BASE comes from the central config (env-driven; localhost only in dev).
+import { API_BASE } from './config';
 export { API_BASE };
-
-// Safety net: in production a missing/localhost API URL is almost always a
-// misconfigured build. Surface it loudly instead of silently hammering localhost.
-if (process.env.NODE_ENV === 'production' && /(^|:\/\/)localhost([/:]|$)|127\.0\.0\.1/.test(API_BASE)) {
-  console.error(
-    '[api] NEXT_PUBLIC_API_URL is missing or points to localhost in production. ' +
-    'Set NEXT_PUBLIC_API_URL at build time to your deployed backend, e.g. https://api.examos.com/api'
-  );
-}
 
 // Simple JWT state storage in localStorage
 let cachedToken = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';

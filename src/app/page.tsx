@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
-import { getAuthUser } from '@/lib/api';
+import { getAuthUser, API_BASE } from '@/lib/api';
 import {
   Sun, Moon, ArrowRight, LayoutDashboard, ChevronDown, Sparkles, Shield, BarChart2,
   BrainCircuit, Bot, BookOpen, Trophy, Timer, Monitor, Wifi,
@@ -163,7 +163,7 @@ export default function Home() {
   useEffect(() => {
     const user = getAuthUser();
     if (user) { setLoggedIn(true); setUserRole(user.role); }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/announcements/active`)
+    fetch(`${API_BASE}/announcements/active`)
       .then(res => res.json())
       .then(data => setAnnouncements(Array.isArray(data?.data) ? data.data : []))
       .catch(() => {});

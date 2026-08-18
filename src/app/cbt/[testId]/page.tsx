@@ -43,6 +43,32 @@ export default function CbtEngine() {
   const currentIndexRef = useRef(0);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
 
+  // Returns the global answer index where a section's questions begin.
+  const getSectionStartIndex = (secIdx: number) => {
+    if (!test?.sections) return 0;
+    let qi = 0;
+    for (let s = 0; s < secIdx; s++) {
+      qi += (test.sections[s].questions || []).length;
+    }
+    return qi;
+  };
+
+  // Switches the active section and lands on its first question. Bypasses the
+  // timed-section navigation lock — used by the timer auto-advance and by the
+  // section selector for sections the user is allowed to enter.
+  const goToSection = (secIdx: number) => {
+    if (!attempt || !test?.sections || secIdx < 0 || secIdx >= test.sections.length) return;
+    const startIdx = getSectionStartIndex(secIdx);
+    setAttempt((a: any) => ({ ...a, activeSectionIndex: secIdx }));
+    const updatedAnswers = [...attempt.answers];
+    if (updatedAnswers[currentIndex]?.status === 'Not Visited') {
+      updatedAnswers[currentIndex] = { ...updatedAnswers[currentIndex], status: 'Not Answered' };
+    }
+    setAttempt((a: any) => ({ ...a, answers: updatedAnswers, activeSectionIndex: secIdx }));
+    setCurrentIndex(startIdx);
+    setSelectedAnswers(attempt.answers[startIdx]?.selectedAnswer || []);
+  };
+
   // Tracks whether an auto-submit is waiting to retry once the connection is back
   const pendingSubmitRef = useRef(false);
 
@@ -72,7 +98,6 @@ export default function CbtEngine() {
         // Start attempt session
         const attemptRes = await api.post('/attempts/start', { testId });
         const attemptData = attemptRes.data;
-        setAttempt(attemptData);
         setTimeLeft(attemptData.remainingSeconds);
 
         // Initialize per-section timers
@@ -86,8 +111,38 @@ export default function CbtEngine() {
           setSectionTimeLeft(secTimes);
         }
 
+        // On resume, if the active section's window already elapsed, auto-advance
+        // to the first section that still has time (or the last section).
+        const times = attemptData.sectionTimeLeft && attemptData.sectionTimeLeft.length === secTimes.length
+          ? attemptData.sectionTimeLeft
+          : secTimes;
+        if (times.length > 0 && attemptData.activeSectionIndex !== undefined) {
+          let secIdx = attemptData.activeSectionIndex;
+          const allZero = times.every((t: number) => t === 0);
+          while (!allZero && secIdx < times.length - 1 && times[secIdx] === 0) {
+            secIdx++;
+          }
+          if (secIdx !== attemptData.activeSectionIndex) {
+            attemptData.activeSectionIndex = secIdx;
+          }
+        }
+        setAttempt(attemptData);
+
         // Find index of first not-answered question
-        const firstUnanswered = attemptData.answers.findIndex((ans: any) => ans.status === 'Not Visited');
+        let firstUnanswered = attemptData.answers.findIndex((ans: any) => ans.status === 'Not Visited');
+        // If we auto-advanced to a new active section, land on its first question
+        // rather than on a question that belongs to an expired section.
+        const activeSecIdx = attemptData.activeSectionIndex ?? 0;
+        if (activeSecIdx > 0) {
+          let secStart = 0;
+          for (let s = 0; s < activeSecIdx; s++) {
+            secStart += (testRes.data.sections[s].questions || []).length;
+          }
+          const secEnd = secStart + (testRes.data.sections[activeSecIdx].questions || []).length;
+          if (firstUnanswered < secStart || firstUnanswered >= secEnd) {
+            firstUnanswered = secStart;
+          }
+        }
         setCurrentIndex(firstUnanswered !== -1 ? firstUnanswered : 0);
 
         // Load pre-selected answer
@@ -220,9 +275,9 @@ export default function CbtEngine() {
         const next = [...prev];
         if (next[activeIdx] > 0) {
           next[activeIdx] = next[activeIdx] - 1;
-          // Auto-switch section when time runs out
+          // Auto-switch to the next section when this section's time runs out
           if (next[activeIdx] === 0 && activeIdx < prev.length - 1) {
-            setAttempt((a: any) => ({ ...a, activeSectionIndex: activeIdx + 1 }));
+            goToSection(activeIdx + 1);
           }
         }
         return next;
@@ -287,7 +342,24 @@ export default function CbtEngine() {
 
   const handleNavigate = (index: number) => {
     if (!attempt || index < 0 || index >= attempt.answers.length) return;
-    
+
+    // When sections carry per-section timers, restrict navigation so a timed
+    // section is locked until its window elapses, and untimed sections stay free.
+    if (test?.sections?.length > 1 && attempt.activeSectionIndex !== undefined) {
+      const activeTimed = Number(test.sections[attempt.activeSectionIndex]?.duration) > 0;
+      const activeStart = getSectionStartIndex(attempt.activeSectionIndex);
+      const activeEnd = activeStart + (test.sections[attempt.activeSectionIndex]?.questions || []).length;
+      const targetTimed = test.sections.findIndex((s: any, si: number) => {
+        const sStart = getSectionStartIndex(si);
+        const sEnd = sStart + (s.questions || []).length;
+        return index >= sStart && index < sEnd;
+      });
+      if (activeTimed && (index < activeStart || index >= activeEnd)) return; // locked into active timed section
+      if (!activeTimed && targetTimed !== -1 && targetTimed !== attempt.activeSectionIndex && Number(test.sections[targetTimed]?.duration) > 0) {
+        return; // can't jump into a timed section early
+      }
+    }
+
     // Save current active state before changing
     const updatedAnswers = [...attempt.answers];
     const prevAns = updatedAnswers[currentIndex];
@@ -601,25 +673,27 @@ export default function CbtEngine() {
           
           {/* Section Selector (only when multiple sections) */}
           {test.sections.length > 1 && (
-          <div className="flex items-center gap-2 border-b border-border pb-4 mb-6">
+          <div className="flex items-center gap-2 border-b border-border pb-4 mb-6 flex-wrap">
             {test.sections.map((sec: any, idx: number) => {
               const secRemaining = sectionTimeLeft[idx];
+              const activeTimed = Number(test.sections[attempt.activeSectionIndex]?.duration) > 0;
+              // If the active section is timed, the user is locked into it until its
+              // window elapses. Otherwise, untimed sections stay free, but a timed
+              // section that isn't active remains locked (can't jump into it early).
+              const isLocked = activeTimed
+                ? idx !== attempt.activeSectionIndex
+                : Number(sec.duration) > 0 && idx !== attempt.activeSectionIndex;
               return (
                 <button 
                   key={sec._id}
-                  onClick={() => {
-                    // Compute start index of this section
-                    let qi = 0;
-                    for (let s = 0; s < idx; s++) {
-                      qi += (test.sections[s].questions || []).length;
-                    }
-                    setAttempt((a: any) => ({ ...a, activeSectionIndex: idx }));
-                    handleNavigate(qi);
-                  }}
+                  disabled={isLocked}
+                  onClick={() => goToSection(idx)}
                   className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all flex items-center gap-2 ${
                     attempt.activeSectionIndex === idx 
                       ? 'bg-primary/10 border-primary text-primary' 
-                      : 'bg-card border-border hover:bg-muted text-muted-foreground'
+                      : isLocked
+                        ? 'bg-card border-border opacity-40 cursor-not-allowed'
+                        : 'bg-card border-border hover:bg-muted text-muted-foreground'
                   }`}
                 >
                   {sec.name}
@@ -634,6 +708,20 @@ export default function CbtEngine() {
 
           {/* Question display */}
           <div className="flex-1 flex flex-col gap-6">
+            {/* Current section label — only when the test has multiple sections */}
+            {test.sections.length > 1 && test.sections[attempt.activeSectionIndex] && (
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+                  <BookOpen className="w-3 h-3" />
+                  {test.sections[attempt.activeSectionIndex].name}
+                </span>
+                {sectionTimeLeft[attempt.activeSectionIndex] > 0 && (
+                  <span className="text-[11px] font-mono text-rose-500 font-semibold">
+                    Section Time: {formatTime(sectionTimeLeft[attempt.activeSectionIndex])}
+                  </span>
+                )}
+              </div>
+            )}
             {!currentQuestion ? (
               <div className="p-8 text-center text-muted-foreground text-sm border border-border rounded-3xl bg-card">Question data not available.</div>
             ) : (

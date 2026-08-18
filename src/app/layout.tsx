@@ -5,6 +5,7 @@ import { ReactQueryProvider } from '@/components/ReactQueryProvider';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ErrorReporter from '@/components/ErrorReporter';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
+import { SITE_URL } from '@/lib/config';
 import './globals.css';
 
 const inter = Inter({
@@ -26,7 +27,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: {
     default: 'ExamOS - Premium Computer-Based Test (CBT) Operating System',
     template: '%s | ExamOS',

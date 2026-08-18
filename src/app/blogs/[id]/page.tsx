@@ -1,11 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import BlogDetailClient from './BlogDetailClient';
+import { API_BASE, SITE_URL } from '@/lib/config';
 
 type Props = { params: Promise<{ id: string }> };
-
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.exam-os.in';
 
 async function getBlog(id: string) {
   try {

@@ -45,8 +45,8 @@ export default function TestSeriesDetail() {
   const [sections, setSections] = useState<any[]>([
     { name: 'Section 1', duration: 0, negativeMarking: true, marksPerQuestion: 2, negativeMarksPerQuestion: 0.5, questionIds: [] }
   ]);
-  const [questionMode, setQuestionMode] = useState<'paste' | 'bank' | 'auto'>('paste');
-  const [questionPaste, setQuestionPaste] = useState('');
+  const [sectionModes, setSectionModes] = useState<string[]>(['paste']); // per-section: paste | bank | auto
+  const [sectionPastes, setSectionPastes] = useState<string[]>(['']); // per-section paste text
   const [saving, setSaving] = useState(false);
 
   // Auto-select state
@@ -58,7 +58,8 @@ export default function TestSeriesDetail() {
     difficulties: { easy: number; medium: number; hard: number };
   }[]>([]);
 
-  // Question bank browser state
+  // Question bank browser state (shared across sections — only one section's
+  // bank tab is open at a time via `activeBankSection`)
   const [bankQuestions, setBankQuestions] = useState<any[]>([]);
   const [bankTotal, setBankTotal] = useState(0);
   const [bankSearch, setBankSearch] = useState('');
@@ -70,7 +71,7 @@ export default function TestSeriesDetail() {
   const [bankSubjects, setBankSubjects] = useState<string[]>([]);
   const [bankLoading, setBankLoading] = useState(false);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(new Set());
-  const [targetSectionIndex, setTargetSectionIndex] = useState(0);
+  const [activeBankSection, setActiveBankSection] = useState<number | null>(null);
 
   useEffect(() => {
     const user = getAuthUser();
@@ -116,10 +117,10 @@ export default function TestSeriesDetail() {
   };
 
   useEffect(() => {
-    if (showBuilder && questionMode === 'bank') {
+    if (showBuilder && activeBankSection !== null) {
       loadBankQuestions();
     }
-  }, [showBuilder, questionMode, bankSubject, bankDifficulty, bankType, bankUsageStatus]);
+  }, [showBuilder, activeBankSection, bankSubject, bankDifficulty, bankType, bankUsageStatus]);
 
   const openCreate = () => {
     setEditingTest(null);
@@ -129,8 +130,9 @@ export default function TestSeriesDetail() {
     setScheduled(false); setStartTime(''); setEndTime('');
     setIncludedInSubscription(false); setFreeWindowOn(false); setFreeFrom(''); setFreeTo('');
     setSections([{ name: 'Section 1', duration: 0, negativeMarking: true, marksPerQuestion: 2, negativeMarksPerQuestion: 0.5, questionIds: [] }]);
-    setQuestionPaste('');
-    setQuestionMode('paste');
+    setSectionModes(['paste']);
+    setSectionPastes(['']);
+    setActiveBankSection(null);
     setSelectedQuestionIds(new Set());
     setShowBuilder(true);
   };
@@ -156,16 +158,24 @@ export default function TestSeriesDetail() {
       negativeMarksPerQuestion: s.negativeMarksPerQuestion || 0.5,
       questionIds: s.questions?.map((q: any) => q._id || q) || [],
     })) || []);
-    setQuestionPaste('');
-    setQuestionMode('bank');
+    setSectionModes(t.sections?.map(() => 'bank') || ['bank']);
+    setSectionPastes(t.sections?.map(() => '') || ['']);
+    setActiveBankSection(0);
     setSelectedQuestionIds(new Set());
     setShowBuilder(true);
   };
 
   const handleAddSection = () => {
     setSections([...sections, { name: 'Section ' + (sections.length + 1), duration: 0, negativeMarking: true, marksPerQuestion: 2, negativeMarksPerQuestion: 0.5, questionIds: [] }]);
+    setSectionModes([...sectionModes, 'paste']);
+    setSectionPastes([...sectionPastes, '']);
   };
-  const handleRemoveSection = (idx: number) => { setSections(sections.filter((_, i) => i !== idx)); };
+  const handleRemoveSection = (idx: number) => {
+    setSections(sections.filter((_, i) => i !== idx));
+    setSectionModes(sectionModes.filter((_, i) => i !== idx));
+    setSectionPastes(sectionPastes.filter((_, i) => i !== idx));
+    if (activeBankSection === idx) setActiveBankSection(null);
+  };
   const handleSectionChange = (idx: number, field: string, val: any) => {
     const updated = [...sections]; updated[idx][field] = val; setSections(updated);
   };
@@ -176,12 +186,12 @@ export default function TestSeriesDetail() {
     setSelectedQuestionIds(next);
   };
 
-  const addSelectedToSection = () => {
+  const addSelectedToSection = (sectionIdx: number) => {
     if (selectedQuestionIds.size === 0) return;
     const updated = [...sections];
-    const existing = new Set(updated[targetSectionIndex].questionIds);
+    const existing = new Set(updated[sectionIdx].questionIds);
     selectedQuestionIds.forEach(id => existing.add(id));
-    updated[targetSectionIndex] = { ...updated[targetSectionIndex], questionIds: Array.from(existing) };
+    updated[sectionIdx] = { ...updated[sectionIdx], questionIds: Array.from(existing) };
     setSections(updated);
     setSelectedQuestionIds(new Set());
   };
@@ -190,15 +200,6 @@ export default function TestSeriesDetail() {
     const updated = [...sections];
     updated[secIdx] = { ...updated[secIdx], questionIds: updated[secIdx].questionIds.filter((id: string) => id !== qId) };
     setSections(updated);
-  };
-
-  const initAutoConfigs = () => {
-    setAutoConfigs(sections.map(s => ({
-      totalQuestions: 10,
-      usageStatus: 'unused',
-      subjects: autoSubjects.length > 0 ? [{ name: autoSubjects[0], pct: 100 }] : [],
-      difficulties: { easy: 30, medium: 50, hard: 20 },
-    })));
   };
 
   // Distributes `total` items across buckets proportionally using largest-remainder method
@@ -282,21 +283,27 @@ export default function TestSeriesDetail() {
     if (!title) { alert('Test title is required.'); return; }
     setSaving(true);
     try {
-      // If paste mode has text, parse it and add IDs to sections
+      // Parse pasted questions per-section and attach to that section only
       let finalSections = sections;
-      if (questionMode === 'paste' && questionPaste.trim()) {
-        const parseRes = await api.post('/questions/paste', { text: questionPaste });
-        const newQuestions = parseRes.data || [];
-        if (newQuestions.length > 0) {
-          finalSections = sections.map((s, i) => {
-            if (i === 0) {
-              const existing = new Set(s.questionIds || []);
-              newQuestions.forEach((q: any) => existing.add(q._id));
-              return { ...s, questionIds: Array.from(existing) };
-            }
-            return s;
-          });
+      const hasPaste = sectionPastes.some((t, i) => sectionModes[i] === 'paste' && t.trim());
+      if (hasPaste) {
+        const parsedIdsPerSection: string[][] = [];
+        for (let i = 0; i < sections.length; i++) {
+          if (sectionModes[i] === 'paste' && sectionPastes[i]?.trim()) {
+            const parseRes = await api.post('/questions/paste', { text: sectionPastes[i] });
+            const newQuestions = parseRes.data || [];
+            parsedIdsPerSection[i] = newQuestions.map((q: any) => q._id);
+          } else {
+            parsedIdsPerSection[i] = [];
+          }
         }
+        finalSections = sections.map((s, i) => {
+          const newIds = parsedIdsPerSection[i] || [];
+          if (newIds.length === 0) return s;
+          const existing = new Set(s.questionIds || []);
+          newIds.forEach((id: string) => existing.add(id));
+          return { ...s, questionIds: Array.from(existing) };
+        });
       }
 
       const payload = {
@@ -615,6 +622,17 @@ export default function TestSeriesDetail() {
                         Negative
                       </label>
                     </div>
+                    <div className="flex flex-col gap-1 col-span-2">
+                      <label className="text-[10px] font-bold text-muted-foreground">Section Time (minutes) — 0 = no limit</label>
+                      <input type="number" min={0} value={sec.duration} onChange={e => handleSectionChange(idx, 'duration', Number(e.target.value))} className="px-3 py-2 rounded-lg border border-border bg-card text-xs" placeholder="e.g. 25" />
+                    </div>
+                    <div className="flex flex-col gap-1 col-span-2 justify-end">
+                      <p className="text-[10px] text-muted-foreground">
+                        {Number(sec.duration) > 0
+                          ? `Section auto-advances to the next section when ${sec.duration} min is up.`
+                          : 'No section timer — students move at their own pace.'}
+                      </p>
+                    </div>
                   </div>
                   {/* Show assigned questions in section */}
                   {sec.questionIds?.length > 0 && (
@@ -630,268 +648,271 @@ export default function TestSeriesDetail() {
                       </div>
                     </div>
                   )}
+
+                  {/* Per-section question source */}
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Add questions to "{sec.name}"</p>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => { setSectionModes(prev => { const m = [...prev]; m[idx] = 'paste'; return m; }); }}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${sectionModes[idx] === 'paste' ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
+                          <FileText className="w-3 h-3 inline mr-1" /> Paste
+                        </button>
+                        <button onClick={() => { setSectionModes(prev => { const m = [...prev]; m[idx] = 'bank'; return m; }); setActiveBankSection(idx); loadBankQuestions(); }}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${sectionModes[idx] === 'bank' ? 'bg-primary text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
+                          <Database className="w-3 h-3 inline mr-1" /> Bank
+                        </button>
+                        <button onClick={async () => {
+                          setSectionModes(prev => { const m = [...prev]; m[idx] = 'auto'; return m; });
+                          if (autoSubjects.length === 0) {
+                            const subjRes = await api.get('/questions/subjects').catch(() => ({ data: [] }));
+                            setAutoSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
+                          }
+                          setAutoConfigs(prev => {
+                            const upd = [...prev];
+                            if (!upd[idx]) {
+                              upd[idx] = {
+                                totalQuestions: 10,
+                                usageStatus: 'unused',
+                                subjects: autoSubjects.length > 0 ? [{ name: autoSubjects[0], pct: 100 }] : [],
+                                difficulties: { easy: 30, medium: 50, hard: 20 },
+                              };
+                            }
+                            return upd;
+                          });
+                        }}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${sectionModes[idx] === 'auto' ? 'bg-violet-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
+                          <Sparkles className="w-3 h-3 inline mr-1" /> Auto Select
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Paste — per section */}
+                    {sectionModes[idx] === 'paste' && (
+                      <div className="flex flex-col gap-2">
+                        <textarea value={sectionPastes[idx] || ''} onChange={e => { setSectionPastes(prev => { const t = [...prev]; t[idx] = e.target.value; return t; }); }}
+                          placeholder={`[Q] What is the chemical symbol for Gold?\n[SUB-Q] Choose the correct option:\n[O_a] Go\n[O_b] Gd\n[O_c] Au\n[O_d] Ag\n[ANS] C\n[EXP] Au is from Latin "Aurum".\n[SUBJ] Science Technology\n[TOPIC] Chemistry\n[TYPE] Conceptual\n[DIFFICULTY] Easy\n[NEXT]`}
+                          className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 h-24 font-mono text-xs" />
+                        <p className="text-[10px] text-muted-foreground">Pasted questions are parsed and added only to "{sec.name}" when you save.</p>
+                      </div>
+                    )}
+
+                    {/* Bank — per section */}
+                    {sectionModes[idx] === 'bank' && activeBankSection === idx && (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-col gap-1 flex-1 min-w-[130px]">
+                            <label className="text-[10px] font-bold text-muted-foreground">Search</label>
+                            <div className="relative">
+                              <Search className="w-3 h-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+                              <input type="text" value={bankSearch} onChange={e => setBankSearch(e.target.value)} placeholder="Search body text..."
+                                className="w-full pl-8 pr-2 py-1.5 rounded-lg border border-border bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20" />
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1 flex-1 min-w-[110px]">
+                            <label className="text-[10px] font-bold text-muted-foreground">Subject</label>
+                            <select value={bankSubject} onChange={e => setBankSubject(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-xs outline-none cursor-pointer">
+                              <option value="">All Subjects</option>
+                              {bankSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1 flex-1 min-w-[110px]">
+                            <label className="text-[10px] font-bold text-muted-foreground">Topic</label>
+                            <input type="text" value={bankTopic} onChange={e => setBankTopic(e.target.value)} placeholder="e.g. Profit & Loss"
+                              className="w-full px-2 py-1.5 rounded-lg border border-border bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20" />
+                          </div>
+                          <div className="flex flex-col gap-1 flex-1 min-w-[100px]">
+                            <label className="text-[10px] font-bold text-muted-foreground">Type</label>
+                            <select value={bankType} onChange={e => setBankType(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-xs outline-none cursor-pointer">
+                              <option value="">All Types</option>
+                              <option value="Single Correct">Single Correct</option>
+                              <option value="Multiple Correct">Multiple Correct</option>
+                              <option value="Numerical">Numerical</option>
+                              <option value="Data Sufficiency">Data Sufficiency</option>
+                              <option value="Assertion Reason">Assertion Reason</option>
+                              <option value="Match the Following">Match the Following</option>
+                              <option value="True False">True False</option>
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1 min-w-[90px]">
+                            <label className="text-[10px] font-bold text-muted-foreground">Difficulty</label>
+                            <select value={bankDifficulty} onChange={e => setBankDifficulty(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-xs outline-none cursor-pointer">
+                              <option value="">All</option>
+                              <option value="Easy">Easy</option>
+                              <option value="Medium">Medium</option>
+                              <option value="Hard">Hard</option>
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1 min-w-[90px]">
+                            <label className="text-[10px] font-bold text-muted-foreground">Status</label>
+                            <select value={bankUsageStatus} onChange={e => setBankUsageStatus(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-xs outline-none cursor-pointer">
+                              <option value="unused">Unused</option>
+                              <option value="">All</option>
+                              <option value="used">Used</option>
+                            </select>
+                          </div>
+                          <div className="flex items-end min-w-[55px]">
+                            <button onClick={loadBankQuestions} className="w-full px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/95 flex items-center justify-center gap-1">
+                              <Search className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground border-t border-border pt-2">
+                          <span className="font-semibold">{bankTotal} question{bankTotal !== 1 ? 's' : ''} found</span>
+                          <button onClick={() => addSelectedToSection(idx)} disabled={selectedQuestionIds.size === 0}
+                            className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm shadow-primary/20">
+                            <Plus className="w-3 h-3" /> Add {selectedQuestionIds.size > 0 ? `(${selectedQuestionIds.size}) ` : ''}to "{sec.name}"
+                          </button>
+                        </div>
+
+                        {bankLoading ? (
+                          <div className="text-center py-6 text-xs text-muted-foreground">Loading questions...</div>
+                        ) : bankQuestions.length === 0 ? (
+                          <div className="text-center py-8 border-2 border-dashed rounded-2xl bg-card/50 text-xs text-muted-foreground">
+                            <Database className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                            <p className="font-semibold">No questions match your filters</p>
+                            <p className="mt-1">Try adjusting filters or paste new questions in Question Manager.</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1.5 max-h-[40vh] overflow-y-auto border rounded-2xl p-1.5 bg-background/50">
+                            {bankQuestions.map((q: any) => {
+                              const isSelected = selectedQuestionIds.has(q._id);
+                              const isAssigned = sections.some((s: any) => s.questionIds?.includes(q._id));
+                              return (
+                                <div key={q._id} className={`p-3 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
+                                  isSelected ? 'border-primary ring-1 ring-primary/30 bg-primary/[0.03]' :
+                                  isAssigned ? 'border-emerald-500/30 bg-emerald-500/[0.03] opacity-60' :
+                                  'border-border bg-card hover:border-primary/30 hover:shadow-sm'
+                                }`}
+                                  onClick={() => { if (!isAssigned) toggleSelectQuestion(q._id); }}>
+                                  <input type="checkbox" checked={isSelected} readOnly
+                                    className="mt-0.5 rounded border-border text-primary cursor-pointer shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold leading-relaxed line-clamp-2">{q.body?.split('\n')[0] || '(no body)'}</p>
+                                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                      {q.subject && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{q.subject}</span>}
+                                      {q.topic && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground">{q.topic}</span>}
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
+                                        q.difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-600' :
+                                        q.difficulty === 'Hard' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600'
+                                      }`}>{q.difficulty || 'N/A'}</span>
+                                      {q.type && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500">{q.type}</span>}
+                                      <span className="text-[9px] text-muted-foreground">+{q.marks ?? 1}</span>
+                                      {isAssigned && <span className="text-[9px] text-emerald-500 font-semibold">Already in test</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Auto Select — per section */}
+                    {sectionModes[idx] === 'auto' && (
+                      <div className="flex flex-col gap-3">
+                        {!autoConfigs[idx] && (
+                          <p className="text-[10px] text-muted-foreground">Set up auto-fill below, then click Auto-Fill Section.</p>
+                        )}
+                        {autoConfigs[idx] && (
+                          <>
+                            <div className="grid grid-cols-4 gap-3">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-muted-foreground">Total Questions</label>
+                                <input type="number" min={1} value={autoConfigs[idx].totalQuestions}
+                                  onChange={e => { const upd = [...autoConfigs]; upd[idx] = { ...upd[idx], totalQuestions: Math.max(1, Number(e.target.value)) }; setAutoConfigs(upd); }}
+                                  className="px-2 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20" />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-muted-foreground">Usage</label>
+                                <select value={autoConfigs[idx].usageStatus} onChange={e => { const upd = [...autoConfigs]; upd[idx] = { ...upd[idx], usageStatus: e.target.value }; setAutoConfigs(upd); }}
+                                  className="px-2 py-1.5 rounded-lg border border-border bg-card text-xs outline-none cursor-pointer">
+                                  <option value="unused">Unused</option>
+                                  <option value="">All</option>
+                                  <option value="used">Used</option>
+                                </select>
+                              </div>
+                              <div className="flex flex-col gap-1 col-span-2">
+                                <label className="text-[10px] font-bold text-muted-foreground">Difficulty Split (%)</label>
+                                <div className="flex gap-1.5 items-center">
+                                  <input type="number" min={0} max={100} value={autoConfigs[idx].difficulties.easy}
+                                    onChange={e => { const v = Math.max(0, Math.min(100, Number(e.target.value))); const upd = [...autoConfigs]; upd[idx] = { ...upd[idx], difficulties: { ...upd[idx].difficulties, easy: v } }; setAutoConfigs(upd); }}
+                                    className="w-full px-1.5 py-1.5 rounded-lg border border-border bg-card text-xs text-center outline-none focus:ring-2 focus:ring-primary/20" />
+                                  <span className="text-[9px] text-emerald-500 font-bold w-7">Easy</span>
+                                  <input type="number" min={0} max={100} value={autoConfigs[idx].difficulties.medium}
+                                    onChange={e => { const v = Math.max(0, Math.min(100, Number(e.target.value))); const upd = [...autoConfigs]; upd[idx] = { ...upd[idx], difficulties: { ...upd[idx].difficulties, medium: v } }; setAutoConfigs(upd); }}
+                                    className="w-full px-1.5 py-1.5 rounded-lg border border-border bg-card text-xs text-center outline-none focus:ring-2 focus:ring-primary/20" />
+                                  <span className="text-[9px] text-amber-500 font-bold w-8">Med.</span>
+                                  <input type="number" min={0} max={100} value={autoConfigs[idx].difficulties.hard}
+                                    onChange={e => { const v = Math.max(0, Math.min(100, Number(e.target.value))); const upd = [...autoConfigs]; upd[idx] = { ...upd[idx], difficulties: { ...upd[idx].difficulties, hard: v } }; setAutoConfigs(upd); }}
+                                    className="w-full px-1.5 py-1.5 rounded-lg border border-border bg-card text-xs text-center outline-none focus:ring-2 focus:ring-primary/20" />
+                                  <span className="text-[9px] text-rose-500 font-bold w-7">Hard</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground mb-1 block">Subject Allocation</label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {autoSubjects.map(sub => {
+                                  const alloc = autoConfigs[idx].subjects.find(s => s.name === sub);
+                                  return (
+                                    <label key={sub} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-medium cursor-pointer transition-all ${alloc ? 'border-primary/40 bg-primary/[0.04] text-foreground' : 'border-border bg-card text-muted-foreground hover:border-border/60'}`}>
+                                      <input type="checkbox" checked={!!alloc}
+                                        onChange={() => {
+                                          const upd = [...autoConfigs];
+                                          const list = [...upd[idx].subjects];
+                                          if (alloc) { upd[idx] = { ...upd[idx], subjects: list.filter(s => s.name !== sub) }; }
+                                          else { upd[idx] = { ...upd[idx], subjects: [...list, { name: sub, pct: 0 }] }; }
+                                          setAutoConfigs(upd);
+                                        }} className="rounded border-border text-primary" />
+                                      {sub}
+                                      {alloc && (
+                                        <input type="number" min={0} max={100} value={alloc.pct}
+                                          onClick={e => e.stopPropagation()}
+                                          onChange={e => {
+                                            const upd = [...autoConfigs];
+                                            const list = [...upd[idx].subjects];
+                                            const si = list.findIndex(s => s.name === sub);
+                                            if (si !== -1) { list[si] = { ...list[si], pct: Math.max(0, Math.min(100, Number(e.target.value))) }; upd[idx] = { ...upd[idx], subjects: list }; setAutoConfigs(upd); }
+                                          }}
+                                          className="w-11 px-1 py-0.5 rounded border border-border/60 bg-card text-xs text-center outline-none" />)
+                                      }
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                              {(() => {
+                                const subjSum = autoConfigs[idx].subjects.reduce((a, s) => a + s.pct, 0);
+                                return subjSum > 0 && subjSum !== 100 ? (
+                                  <p className="text-[10px] text-rose-500 mt-1">Subject percentages sum to {subjSum}% (should be 100%)</p>
+                                ) : null;
+                              })()}
+                            </div>
+
+                            <div className="flex gap-2">
+                              <button onClick={() => autoFillSection(idx)}
+                                className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-[10px] font-bold hover:bg-violet-700 flex items-center gap-1.5 shadow-sm shadow-violet-600/20">
+                                <Sparkles className="w-3 h-3" /> Auto-Fill "{sec.name}"
+                              </button>
+                              <button onClick={() => {
+                                const updated = [...sections];
+                                updated[idx] = { ...updated[idx], questionIds: [] };
+                                setSections(updated);
+                              }} className="px-3 py-1.5 rounded-lg border border-border bg-card text-[10px] font-semibold hover:bg-muted">
+                                Clear
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
-
-            {/* Question Mode Tabs */}
-            <div className="flex gap-2 border-b border-border pb-3">
-              <button onClick={() => setQuestionMode('paste')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${questionMode === 'paste' ? 'bg-emerald-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
-                <FileText className="w-3.5 h-3.5 inline mr-1" /> Paste
-              </button>
-              <button onClick={() => { setQuestionMode('bank'); loadBankQuestions(); }} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${questionMode === 'bank' ? 'bg-primary text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
-                <Database className="w-3.5 h-3.5 inline mr-1" /> Bank
-              </button>
-              <button onClick={async () => {
-                setQuestionMode('auto');
-                const subjRes = await api.get('/questions/subjects').catch(() => ({ data: [] }));
-                const subs = Array.isArray(subjRes.data) ? subjRes.data : [];
-                setAutoSubjects(subs);
-                setAutoConfigs(sections.map(s => ({
-                  totalQuestions: 10,
-                  usageStatus: 'unused',
-                  subjects: subs.length > 0 ? [{ name: subs[0], pct: 100 }] : [],
-                  difficulties: { easy: 30, medium: 50, hard: 20 },
-                })));
-              }} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${questionMode === 'auto' ? 'bg-violet-600 text-white' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
-                <Sparkles className="w-3.5 h-3.5 inline mr-1" /> Auto Select
-              </button>
-            </div>
-
-            {/* Paste Questions Tab */}
-            {questionMode === 'paste' && (
-              <div className="flex flex-col gap-2">
-                <p className="text-[10px] text-muted-foreground">Paste questions using the structured format. On save, they are parsed and added to the first section.</p>
-                <textarea value={questionPaste} onChange={e => setQuestionPaste(e.target.value)}
-                  placeholder={`[Q] What is the chemical symbol for Gold?\n[SUB-Q] Choose the correct option:\n[O_a] Go\n[O_b] Gd\n[O_c] Au\n[O_d] Ag\n[ANS] C\n[EXP] Au is from Latin "Aurum".\n[SUBJ] Science Technology\n[TOPIC] Chemistry\n[TYPE] Conceptual\n[DIFFICULTY] Easy\n[NEXT]`}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 h-28 font-mono text-xs" />
-              </div>
-            )}
-
-            {/* Select from Bank Tab */}
-            {questionMode === 'bank' && (
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap gap-3">
-                  <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-                    <label className="text-[10px] font-bold text-muted-foreground">Search</label>
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input type="text" value={bankSearch} onChange={e => setBankSearch(e.target.value)} placeholder="Search body text..."
-                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-                    <label className="text-[10px] font-bold text-muted-foreground">Subject</label>
-                    <select value={bankSubject} onChange={e => setBankSubject(e.target.value)} className="px-3 py-2 rounded-xl border border-border bg-background text-xs outline-none cursor-pointer">
-                      <option value="">All Subjects</option>
-                      {bankSubjects.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-                    <label className="text-[10px] font-bold text-muted-foreground">Topic</label>
-                    <input type="text" value={bankTopic} onChange={e => setBankTopic(e.target.value)} placeholder="e.g. Profit & Loss"
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1 min-w-[120px]">
-                    <label className="text-[10px] font-bold text-muted-foreground">Type</label>
-                    <select value={bankType} onChange={e => setBankType(e.target.value)} className="px-3 py-2 rounded-xl border border-border bg-background text-xs outline-none cursor-pointer">
-                      <option value="">All Types</option>
-                      <option value="Single Correct">Single Correct</option>
-                      <option value="Multiple Correct">Multiple Correct</option>
-                      <option value="Numerical">Numerical</option>
-                      <option value="Data Sufficiency">Data Sufficiency</option>
-                      <option value="Assertion Reason">Assertion Reason</option>
-                      <option value="Match the Following">Match the Following</option>
-                      <option value="True False">True False</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1 min-w-[100px]">
-                    <label className="text-[10px] font-bold text-muted-foreground">Difficulty</label>
-                    <select value={bankDifficulty} onChange={e => setBankDifficulty(e.target.value)} className="px-3 py-2 rounded-xl border border-border bg-background text-xs outline-none cursor-pointer">
-                      <option value="">All</option>
-                      <option value="Easy">Easy</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Hard">Hard</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1 flex-1 min-w-[100px]">
-                    <label className="text-[10px] font-bold text-muted-foreground">Status</label>
-                    <select value={bankUsageStatus} onChange={e => setBankUsageStatus(e.target.value)} className="px-3 py-2 rounded-xl border border-border bg-background text-xs outline-none cursor-pointer">
-                      <option value="unused">Unused</option>
-                      <option value="">All</option>
-                      <option value="used">Used</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1 min-w-[120px]">
-                    <label className="text-[10px] font-bold text-muted-foreground">Target Section</label>
-                    <select value={targetSectionIndex} onChange={e => setTargetSectionIndex(Number(e.target.value))} className="px-3 py-2 rounded-xl border border-border bg-background text-xs outline-none cursor-pointer">
-                      {sections.map((s, i) => <option key={i} value={i}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-end min-w-[60px]">
-                    <button onClick={loadBankQuestions} className="w-full px-3 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 flex items-center justify-center gap-1">
-                      <Search className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border pt-3">
-                  <span className="font-semibold">{bankTotal} question{bankTotal !== 1 ? 's' : ''} found</span>
-                  <button onClick={addSelectedToSection} disabled={selectedQuestionIds.size === 0}
-                    className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm shadow-primary/20">
-                    <Plus className="w-3.5 h-3.5" /> Add {selectedQuestionIds.size > 0 ? `(${selectedQuestionIds.size}) ` : ''}to {sections[targetSectionIndex]?.name}
-                  </button>
-                </div>
-
-                {bankLoading ? (
-                  <div className="text-center py-10 text-xs text-muted-foreground">Loading questions...</div>
-                ) : bankQuestions.length === 0 ? (
-                  <div className="text-center py-12 border-2 border-dashed rounded-2xl bg-card/50 text-xs text-muted-foreground">
-                    <Database className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                    <p className="font-semibold">No questions match your filters</p>
-                    <p className="mt-1">Try adjusting filters or paste new questions in Question Manager.</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto border rounded-2xl p-2 bg-background/50">
-                    {bankQuestions.map((q: any) => {
-                      const isSelected = selectedQuestionIds.has(q._id);
-                      const isAssigned = sections.some((s: any) => s.questionIds?.includes(q._id));
-                      return (
-                        <div key={q._id} className={`p-3.5 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                          isSelected ? 'border-primary ring-1 ring-primary/30 bg-primary/[0.03]' :
-                          isAssigned ? 'border-emerald-500/30 bg-emerald-500/[0.03] opacity-60' :
-                          'border-border bg-card hover:border-primary/30 hover:shadow-sm'
-                        }`}
-                          onClick={() => { if (!isAssigned) toggleSelectQuestion(q._id); }}>
-                          <input type="checkbox" checked={isSelected} readOnly
-                            className="mt-0.5 rounded border-border text-primary cursor-pointer shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold leading-relaxed line-clamp-2">{q.body?.split('\n')[0] || '(no body)'}</p>
-                            <div className="flex items-center gap-2 mt-2 flex-wrap">
-                              {q.subject && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{q.subject}</span>}
-                              {q.topic && <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">{q.topic}</span>}
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                                q.difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-600' :
-                                q.difficulty === 'Hard' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600'
-                              }`}>{q.difficulty || 'N/A'}</span>
-                              {q.type && <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500">{q.type}</span>}
-                              <span className="text-[10px] text-muted-foreground">+{q.marks ?? 1}</span>
-                              {isAssigned && <span className="text-[10px] text-emerald-500 font-semibold">Already in test</span>}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Auto Select Tab */}
-            {questionMode === 'auto' && (
-              <div className="flex flex-col gap-4">
-                {autoConfigs.map((cfg, secIdx) => {
-                  const sec = sections[secIdx];
-                  if (!sec) return null;
-                  const subjSum = cfg.subjects.reduce((a, s) => a + s.pct, 0);
-                  return (
-                    <div key={secIdx} className="p-4 rounded-2xl border border-border bg-background">
-                      <div className="flex items-center justify-between mb-3">
-                        <h5 className="text-sm font-bold font-outfit">{sec.name}</h5>
-                        <span className="text-xs text-muted-foreground">Assigned: {sec.questionIds.length}</span>
-                      </div>
-
-                      <div className="grid grid-cols-4 gap-3 mb-3">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold text-muted-foreground">Total Questions</label>
-                          <input type="number" min={1} value={cfg.totalQuestions}
-                            onChange={e => {
-                              const upd = [...autoConfigs]; upd[secIdx] = { ...upd[secIdx], totalQuestions: Math.max(1, Number(e.target.value)) }; setAutoConfigs(upd);
-                            }}
-                            className="px-3 py-2 rounded-xl border border-border bg-card text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20" />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold text-muted-foreground">Usage</label>
-                          <select value={cfg.usageStatus} onChange={e => { const upd = [...autoConfigs]; upd[secIdx] = { ...upd[secIdx], usageStatus: e.target.value }; setAutoConfigs(upd); }}
-                            className="px-3 py-2 rounded-xl border border-border bg-card text-xs outline-none cursor-pointer">
-                            <option value="unused">Unused</option>
-                            <option value="">All</option>
-                            <option value="used">Used</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-1 col-span-2">
-                          <label className="text-[10px] font-bold text-muted-foreground">Difficulty Split (%)</label>
-                          <div className="flex gap-2 items-center">
-                            <input type="number" min={0} max={100} value={cfg.difficulties.easy}
-                              onChange={e => { const v = Math.max(0, Math.min(100, Number(e.target.value))); const upd = [...autoConfigs]; upd[secIdx] = { ...upd[secIdx], difficulties: { ...upd[secIdx].difficulties, easy: v } }; setAutoConfigs(upd); }}
-                              className="w-full px-2 py-2 rounded-xl border border-border bg-card text-xs text-center outline-none focus:ring-2 focus:ring-primary/20" />
-                            <span className="text-[10px] text-emerald-500 font-bold w-8">Easy</span>
-                            <input type="number" min={0} max={100} value={cfg.difficulties.medium}
-                              onChange={e => { const v = Math.max(0, Math.min(100, Number(e.target.value))); const upd = [...autoConfigs]; upd[secIdx] = { ...upd[secIdx], difficulties: { ...upd[secIdx].difficulties, medium: v } }; setAutoConfigs(upd); }}
-                              className="w-full px-2 py-2 rounded-xl border border-border bg-card text-xs text-center outline-none focus:ring-2 focus:ring-primary/20" />
-                            <span className="text-[10px] text-amber-500 font-bold w-10">Med.</span>
-                            <input type="number" min={0} max={100} value={cfg.difficulties.hard}
-                              onChange={e => { const v = Math.max(0, Math.min(100, Number(e.target.value))); const upd = [...autoConfigs]; upd[secIdx] = { ...upd[secIdx], difficulties: { ...upd[secIdx].difficulties, hard: v } }; setAutoConfigs(upd); }}
-                              className="w-full px-2 py-2 rounded-xl border border-border bg-card text-xs text-center outline-none focus:ring-2 focus:ring-primary/20" />
-                            <span className="text-[10px] text-rose-500 font-bold w-8">Hard</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mb-3">
-                        <label className="text-[10px] font-bold text-muted-foreground mb-1 block">Subject Allocation</label>
-                        <div className="flex flex-wrap gap-2">
-                          {autoSubjects.map(sub => {
-                            const alloc = cfg.subjects.find(s => s.name === sub);
-                            return (
-                              <label key={sub} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${alloc ? 'border-primary/40 bg-primary/[0.04] text-foreground' : 'border-border bg-card text-muted-foreground hover:border-border/60'}`}>
-                                <input type="checkbox" checked={!!alloc}
-                                  onChange={() => {
-                                    const upd = [...autoConfigs];
-                                    const list = [...upd[secIdx].subjects];
-                                    if (alloc) { upd[secIdx] = { ...upd[secIdx], subjects: list.filter(s => s.name !== sub) }; }
-                                    else { upd[secIdx] = { ...upd[secIdx], subjects: [...list, { name: sub, pct: 0 }] }; }
-                                    setAutoConfigs(upd);
-                                  }} className="rounded border-border text-primary" />
-                                {sub}
-                                {alloc && (
-                                  <input type="number" min={0} max={100} value={alloc.pct}
-                                    onClick={e => e.stopPropagation()}
-                                    onChange={e => {
-                                      const upd = [...autoConfigs];
-                                      const list = [...upd[secIdx].subjects];
-                                      const idx = list.findIndex(s => s.name === sub);
-                                      if (idx !== -1) { list[idx] = { ...list[idx], pct: Math.max(0, Math.min(100, Number(e.target.value))) }; upd[secIdx] = { ...upd[secIdx], subjects: list }; setAutoConfigs(upd); }
-                                    }}
-                                    className="w-12 px-1 py-0.5 rounded border border-border/60 bg-card text-xs text-center outline-none" />)
-                                }
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {subjSum > 0 && subjSum !== 100 && (
-                          <p className="text-[10px] text-rose-500 mt-1">Subject percentages sum to {subjSum}% (should be 100%)</p>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button onClick={() => autoFillSection(secIdx)}
-                          className="px-4 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 flex items-center gap-1.5 shadow-sm shadow-violet-600/20">
-                          <Sparkles className="w-3.5 h-3.5" /> Auto-Fill Section
-                        </button>
-                        <button onClick={() => {
-                          const updated = [...sections];
-                          updated[secIdx] = { ...updated[secIdx], questionIds: [] };
-                          setSections(updated);
-                        }} className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-semibold hover:bg-muted">
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             {/* Actions */}
             <div className="grid grid-cols-2 gap-3 mt-2">

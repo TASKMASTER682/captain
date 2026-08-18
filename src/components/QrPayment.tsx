@@ -2,12 +2,13 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Loader2, CheckCircle2, XCircle, Clock, Copy, Check, Smartphone, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Smartphone, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface QrPaymentProps {
   orderId: string;
   razorpayOrderId: string;
+  razorpayQrImage?: string | null;
   upiString: string;
   merchantVpa: string;
   amount: number;
@@ -21,6 +22,7 @@ type PaymentMode = 'qr' | 'upi-app' | 'upi-id';
 export default function QrPayment({
   orderId,
   razorpayOrderId,
+  razorpayQrImage,
   upiString,
   merchantVpa,
   amount,
@@ -29,7 +31,6 @@ export default function QrPayment({
   onCancel,
 }: QrPaymentProps) {
   const [status, setStatus] = useState<'pending' | 'polling' | 'paid' | 'failed'>('pending');
-  const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<PaymentMode>('qr');
   const [upiInput, setUpiInput] = useState('');
   const [upiError, setUpiError] = useState('');
@@ -64,12 +65,6 @@ export default function QrPayment({
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
   }, []);
-
-  const copyVpa = () => {
-    navigator.clipboard.writeText(merchantVpa);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const openUpiApp = () => {
     window.location.href = upiString;
@@ -128,20 +123,23 @@ export default function QrPayment({
         </button>
       </div>
 
-      {/* QR Mode */}
+      {/* QR Mode — use Razorpay's official UPI QR when available */}
       {mode === 'qr' && (
         <>
           <p className="text-xs text-muted-foreground">Scan with any UPI app (GPay, PhonePe, Paytm etc.)</p>
           <div className="bg-white p-4 rounded-xl shadow-lg border">
-            <QRCodeSVG value={upiString} size={200} level="H" includeMargin={false} />
+            {razorpayQrImage ? (
+              <img src={razorpayQrImage} alt="UPI QR" className="w-[200px] h-[200px]" />
+            ) : (
+              <img src="" alt="" hidden />
+            )}
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>UPI ID:</span>
-            <code className="bg-muted px-2 py-1 rounded text-xs font-mono">{merchantVpa}</code>
-            <button onClick={copyVpa} className="p-1 hover:bg-muted rounded transition-colors">
-              {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-            </button>
-          </div>
+          <button
+            onClick={startPolling}
+            className="mt-2 px-6 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-sm"
+          >
+            I&apos;ve Completed Payment
+          </button>
         </>
       )}
 

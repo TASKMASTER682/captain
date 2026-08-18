@@ -132,6 +132,12 @@ body {
 }
 .animate-glow { animation: pulse-glow 7s ease-in-out infinite; }
 
+@keyframes red-glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px -5px rgba(244, 63, 94, 0.55); }
+  50% { box-shadow: 0 0 40px -5px rgba(244, 63, 94, 0.9); }
+}
+.animate-pulse-glow { animation: red-glow-pulse 3s ease-in-out infinite; }
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }

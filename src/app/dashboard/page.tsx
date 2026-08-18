@@ -607,10 +607,10 @@ export default function StudentDashboard() {
             {/* Explore Test Series */}
             <Link
               href="/test-series"
-              className="group p-5 rounded-3xl border border-border bg-card shadow-sm flex items-center justify-between gap-4 hover:border-primary/40 hover:shadow-md transition-all"
+              className="group p-5 rounded-3xl border-2 border-rose-500/60 bg-gradient-to-br from-rose-500/10 via-card to-card shadow-[0_0_25px_-5px_rgba(244,63,94,0.6)] flex items-center justify-between gap-4 hover:border-rose-500 hover:shadow-[0_0_40px_-5px_rgba(244,63,94,0.8)] transition-all animate-pulse-glow"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-colors">
                   <Star className="w-6 h-6" />
                 </div>
                 <div className="min-w-0">
@@ -618,7 +618,7 @@ export default function StudentDashboard() {
                   <p className="text-xs text-muted-foreground truncate">Browse recommended series & search for more</p>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
+              <ChevronRight className="w-5 h-5 text-rose-500 group-hover:text-rose-600 group-hover:translate-x-1 transition-all shrink-0" />
             </Link>
 
             {/* Enrolled Section */}

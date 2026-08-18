@@ -10,6 +10,7 @@ import {
   XCircle, PlusCircle, Clock, Play, ChevronLeft, Ticket, CheckCircle2, IndianRupee, X,
 } from 'lucide-react';
 import QrPayment from '@/components/QrPayment';
+import RazorpayCheckout from '@/components/RazorpayCheckout';
 
 export default function TestSeriesPage() {
   const router = useRouter();
@@ -512,16 +513,11 @@ export default function TestSeriesPage() {
       {/* QR Payment Modal */}
       {qrPayment && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold font-outfit">Scan & Pay</h3>
-              <button onClick={() => { setQrPayment(null); setCheckoutItem(null); }} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
-            </div>
-            <QrPayment
+          {qrPayment.keyId && qrPayment.razorpayOrderId ? (
+            <RazorpayCheckout
+              keyId={qrPayment.keyId}
               orderId={qrPayment.orderId}
               razorpayOrderId={qrPayment.razorpayOrderId}
-              upiString={qrPayment.upiString}
-              merchantVpa={qrPayment.merchantVpa}
               amount={qrPayment.amount}
               itemName={qrPayment.item.name}
               onSuccess={async () => {
@@ -532,7 +528,29 @@ export default function TestSeriesPage() {
               }}
               onCancel={() => { setQrPayment(null); setCheckoutItem(null); setProcessing(false); }}
             />
-          </div>
+          ) : (
+            <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold font-outfit">Scan & Pay</h3>
+                <button onClick={() => { setQrPayment(null); setCheckoutItem(null); }} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
+              </div>
+              <QrPayment
+                orderId={qrPayment.orderId}
+                razorpayOrderId={qrPayment.razorpayOrderId}
+                upiString={qrPayment.upiString}
+                merchantVpa={qrPayment.merchantVpa}
+                amount={qrPayment.amount}
+                itemName={qrPayment.item.name}
+                onSuccess={async () => {
+                  setQrPayment(null);
+                  setCheckoutItem(null);
+                  await loadData();
+                  alert('Payment successful! Access unlocked.');
+                }}
+                onCancel={() => { setQrPayment(null); setCheckoutItem(null); setProcessing(false); }}
+              />
+            </div>
+          )}
         </div>
       )}
 

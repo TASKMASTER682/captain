@@ -63,19 +63,64 @@ function LoginForm() {
     if (ref) setReferralCode(ref);
   }, [searchParams]);
 
-  // Google OAuth callback handling — exchange the refresh-token cookie for an
-  // access token, then route new users to preferences and existing users to the
-  // dashboard.
+  // Google OAuth callback handling. The backend redirects to /login#provider=google&new=1|0&token=...
+  // The token is delivered in the URL hash (not a cookie) so cross-origin production
+  // deployments don't lose it to third-party cookie blocking. Existing (non-Google)
+  // sessions fall back to the refresh-token cookie path.
   useEffect(() => {
-    if (searchParams.get('provider') !== 'google') return;
+    const isGoogleFlow = () => {
+      if (searchParams.get('provider') === 'google') return true;
+      try {
+        const hash = new URLSearchParams(window.location.hash.slice(1));
+        return hash.get('provider') === 'google';
+      } catch {
+        return false;
+      }
+    };
+    if (!isGoogleFlow()) return;
+
+    const readHashToken = () => {
+      try {
+        const hash = new URLSearchParams(window.location.hash.slice(1));
+        return { token: hash.get('token'), isNewUser: hash.get('new') === '1' };
+      } catch {
+        return { token: null, isNewUser: false };
+      }
+    };
 
     const completeGoogleAuth = async () => {
       try {
         setLoading(true);
-        const res = await api.post('/auth/refresh', {});
-        const { token, user } = res.data;
+        let token: string | null = null;
+        let user: any = null;
+        let isNewUser = searchParams.get('new') === '1';
+
+        const hashToken = readHashToken();
+        if (hashToken.token) {
+          // Fresh cross-origin Google login — token came in the URL hash.
+          token = hashToken.token;
+          isNewUser = hashToken.isNewUser;
+          setAuthToken(token, {});
+          const meRes = await api.get('/auth/me');
+          user = meRes.data?.user || null;
+          setAuthToken(token, user);
+        } else {
+          // Fallback: cookie-based refresh (same-origin setups, localhost).
+          const res = await api.post('/auth/refresh', {});
+          token = res.data.token || '';
+          user = res.data.user;
+        }
+
+        if (!token) {
+          throw new Error('Google sign-in failed. No token received.');
+        }
         setAuthToken(token, user);
-        const isNewUser = searchParams.get('new') === '1';
+
+        // Clear the token from the address bar so it isn't left lying around.
+        try {
+          window.history.replaceState({}, '', '/login');
+        } catch {}
+
         if (isNewUser) {
           setIsGoogleNewUser(true);
           const agencyRes = await api.get('/agencies').catch(() => ({ data: [] }));
@@ -84,7 +129,7 @@ function LoginForm() {
           setSelectedExamIds([]);
           setSelectedAgencyIds([]);
           setShowExamModal(true);
-        } else {
+        } else if (user) {
           router.replace(user.role === 'Super Admin' ? '/admin/dashboard' : '/dashboard');
         }
       } catch (err: any) {

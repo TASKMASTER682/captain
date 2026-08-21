@@ -69,6 +69,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${outfit.variable} ${playfair.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Clear any stale service worker from older builds — a leftover SW that
+            can no longer fetch its script (/sw.js → 404) will intercept navigations
+            and loop the page reload, causing the homepage to re-render endlessly. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();})); }`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col background text-foreground">
         <ErrorBoundary>
           <ReactQueryProvider>

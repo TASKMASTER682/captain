@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "katex/dist/katex.min.css";
 
 @layer base {
   :root {
@@ -119,18 +118,51 @@ body {
 
 /* === Landing page ambient animations === */
 
+/* Hero entrance — runs ONLY on desktop (>=1024px). On mobile the hero stays
+   fully visible so LCP paints immediately; no JS/framer required here. */
+@media (min-width: 1024px) {
+  .hero-fade-in { animation: hero-fade-in 0.6s ease-out both; }
+  .hero-fade-in-delay { animation: hero-fade-in 0.65s ease-out 0.15s both; }
+
+  @keyframes hero-fade-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .shimmer-text {
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: shimmer 8s linear infinite;
+  }
+
+  /* Desktop keeps the original glow scale pulse. */
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.45; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.06); }
+  }
+}
+
+/* Mobile (default): content is visible immediately — no entrance animation. */
+@media (max-width: 1023px) {
+  .hero-fade-in, .hero-fade-in-delay { animation: none; }
+  .shimmer-text { -webkit-background-clip: text; background-clip: text; }
+
+  /* Mobile glow pulses opacity only (composited) — no scale/blur repaint. */
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 0.8; }
+  }
+}
+
+.animate-glow { animation: pulse-glow 7s ease-in-out infinite; }
+
 @keyframes float-y {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-12px); }
 }
 .animate-float { animation: float-y 6s ease-in-out infinite; }
 .animate-float-slow { animation: float-y 9s ease-in-out infinite; }
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.45; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.06); }
-}
-.animate-glow { animation: pulse-glow 7s ease-in-out infinite; }
 
 @keyframes red-glow-pulse {
   0%, 100% { box-shadow: 0 0 20px -5px rgba(244, 63, 94, 0.55); }
@@ -144,12 +176,6 @@ body {
 }
 .animate-shimmer {
   background-size: 200% 100%;
-  animation: shimmer 8s linear infinite;
-}
-.shimmer-text {
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
   animation: shimmer 8s linear infinite;
 }
 
@@ -180,3 +206,79 @@ body {
     animation: none;
   }
 }
+
+/* === Public test-series landing body (admin-pasted HTML) ===
+   Scoped typography so ANY semantic HTML from the CMS renders beautifully and
+   follows the light/dark theme automatically via the CSS variables above.
+   No Tailwind/typography plugin required — element selectors only. */
+.series-body {
+  color: hsl(var(--foreground));
+  font-size: 0.95rem;
+  line-height: 1.75;
+  overflow-wrap: break-word;
+}
+.series-body > :first-child { margin-top: 0; }
+.series-body h1, .series-body h2, .series-body h3, .series-body h4 {
+  font-family: var(--font-outfit), 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+}
+.series-body h1 { font-size: 1.9rem; margin: 1.75rem 0 1rem; }
+.series-body h2 { font-size: 1.45rem; margin: 2.25rem 0 0.9rem; }
+.series-body h3 { font-size: 1.15rem; margin: 1.5rem 0 0.6rem; }
+.series-body h4 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+.series-body p { margin: 0.85rem 0; }
+.series-body ul, .series-body ol { margin: 0.85rem 0; padding-left: 1.4rem; }
+.series-body ul { list-style: disc; }
+.series-body ol { list-style: decimal; }
+.series-body li { margin: 0.35rem 0; }
+.series-body li::marker { color: hsl(var(--primary)); font-weight: 700; }
+.series-body a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 3px; }
+.series-body a:hover { opacity: 0.8; }
+/* Styled CTA links keep their utility text color (white label on a solid
+   primary fill) — the themed link violet above must not paint over it. */
+.series-body a.text-white { color: #fff; }
+.series-body strong, .series-body b { font-weight: 700; color: hsl(var(--foreground)); }
+.series-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 1rem;
+  margin: 1.25rem auto;
+  display: block;
+}
+/* Responsive tables: scroll horizontally on mobile instead of breaking layout. */
+.series-body table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.875rem; margin: 1.25rem 0; }
+.series-body th, .series-body td { border: 1px solid hsl(var(--border)); padding: 0.6rem 0.85rem; text-align: left; vertical-align: top; }
+.series-body th { background: hsl(var(--muted)); font-weight: 700; white-space: nowrap; }
+.series-body blockquote {
+  border-left: 3px solid hsl(var(--primary));
+  background: hsl(var(--muted) / 0.5);
+  border-radius: 0 0.75rem 0.75rem 0;
+  padding: 0.75rem 1.1rem;
+  margin: 1.25rem 0;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+.series-body hr { border: 0; border-top: 1px solid hsl(var(--border)); margin: 2rem 0; }
+.series-body code {
+  background: hsl(var(--muted));
+  border-radius: 0.375rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.85em;
+}
+.series-body details {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  margin: 0.6rem 0;
+  background: hsl(var(--card));
+}
+.series-body summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-family: var(--font-outfit), 'Inter', system-ui, sans-serif;
+  color: hsl(var(--foreground));
+}
+.series-body summary:hover { color: hsl(var(--primary)); }

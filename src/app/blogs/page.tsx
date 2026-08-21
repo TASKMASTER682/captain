@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { ArrowLeft, Newspaper, Search, CalendarDays, Eye, FileText, File, Video } from 'lucide-react';
+import { Newspaper, Search, CalendarDays, Eye, FileText, File, Video } from 'lucide-react';
 import Link from 'next/link';
+import PublicHeader from '@/components/PublicHeader';
 
 export default function BlogsPage() {
   const [blogs, setBlogs] = useState<any[]>([]);
@@ -38,16 +39,7 @@ export default function BlogsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans transition-colors duration-300">
-      <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <h1 className="font-bold text-lg font-playfair flex items-center gap-2">
-            <Newspaper className="w-5 h-5 text-primary" /> Blogs & Articles
-          </h1>
-        </div>
-      </header>
+      <PublicHeader />
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8 flex flex-col gap-5">
         <div className="relative">

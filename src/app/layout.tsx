@@ -24,6 +24,8 @@ const playfair = Playfair_Display({
   subsets: ['latin'],
   variable: '--font-playfair',
   display: 'swap',
+  // Only blogs pages use this font — don't preload it on every page load.
+  preload: false,
 });
 
 export const metadata: Metadata = {

@@ -367,7 +367,9 @@ export default function StudentDashboard() {
       {/* Header */}
       <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+          <Link href="/" className="shrink-0" aria-label="ExamOS home">
+            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+          </Link>
           <span className="font-bold text-xl tracking-tight font-outfit">Dashboard</span>
         </div>
         <div className="flex items-center gap-4">
@@ -396,6 +398,9 @@ export default function StudentDashboard() {
           </Link>
           <Link href="/doubts" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
             <HelpCircle className="w-3.5 h-3.5 text-violet-500" /> Doubts
+          </Link>
+          <Link href="/custom-test" className="px-4 py-2 rounded-xl border border-amber-500/30 bg-amber-500/5 text-xs font-bold hover:border-amber-500/50 hover:bg-amber-500/10 transition-colors flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-amber-500" /> Create Test
           </Link>
           <Link href="/blogs" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
             <Newspaper className="w-3.5 h-3.5 text-sky-500" /> Blogs
@@ -883,7 +888,8 @@ export default function StudentDashboard() {
 
       </main>
 
-      {/* Mobile droplet quick-access bottom bar */}
+      {/* Mobile droplet quick-access bottom bar — students only, staff/admin skip it */}
+      {!['Super Admin', 'Content Manager', 'Support'].includes(user?.role) && (
       <nav aria-label="Quick access" className="md:hidden fixed bottom-0 inset-x-0 z-50">
         <div className="relative mx-2 mb-2 pb-[calc(env(safe-area-inset-bottom)+2px)]">
           <Link
@@ -944,6 +950,7 @@ export default function StudentDashboard() {
           </div>
         </div>
       </nav>
+      )}
 
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground mt-auto">
         Powered by ExamOS CBT Engine. All algorithms run locally.

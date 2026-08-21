@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useTheme } from '@/components/ThemeProvider';
 import { getAuthUser, API_BASE } from '@/lib/api';
 import {
@@ -178,13 +179,14 @@ export default function Home() {
       {/* Header Navigation */}
       <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-lg shadow-primary/20 object-cover" />
+          <Image src="/logo.png" alt="ExamOS" width={40} height={40} priority className="w-10 h-10 rounded-xl shadow-lg shadow-primary/20 object-cover" />
           <span className="font-bold text-2xl tracking-tight bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent font-outfit">
             ExamOS
           </span>
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground font-medium">
+          <Link href="/explore" className="hover:text-foreground transition-colors">Test Series</Link>
           <a href="#engine" className="hover:text-foreground transition-colors">The Engine</a>
           <a href="#features" className="hover:text-foreground transition-colors">Features</a>
           <a href="#how" className="hover:text-foreground transition-colors">How it works</a>
@@ -225,8 +227,9 @@ export default function Home() {
 
         <main className="relative max-w-7xl mx-auto px-6 pt-16 lg:pt-24 pb-16 grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
 
-          {/* Left copy */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="flex flex-col gap-6">
+          {/* Left copy — CSS entrance animation (desktop only via .hero-fade-in),
+              mobile renders visible immediately for a fast LCP. */}
+          <div className="hero-fade-in flex flex-col gap-6">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide w-fit">
               <Sparkles className="w-3.5 h-3.5" /> THE NEXT-GEN ASSESSMENT PLATFORM
             </div>
@@ -283,15 +286,10 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
 
           {/* Right — CBT mock */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.15 }}
-            className="relative"
-          >
+          <div className="relative hero-fade-in-delay">
             {/* Glow behind preview */}
             <div className="absolute inset-0 -z-10 rounded-[2rem] bg-gradient-to-tr from-primary/20 via-transparent to-accent/20 blur-2xl" />
 
@@ -382,7 +380,7 @@ export default function Home() {
                 </div>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         </main>
       </section>
 
@@ -726,7 +724,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-4 gap-10">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+              <Image src="/logo.png" alt="ExamOS" width={40} height={40} loading="lazy" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
               <span className="font-bold text-xl font-outfit">ExamOS</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">
@@ -736,7 +734,7 @@ export default function Home() {
 
           {[
             { h: 'Platform', links: [['Mock Tests', '/login'], ['Practice', '/practice'], ['Doubts', '/doubts'], ['Materials', '/materials']] },
-            { h: 'Resources', links: [['Blogs', '/blogs'], ['Leaderboards', '/leaderboard'], ['Revision', '/revision'], ['Plans', '/plans']] },
+            { h: 'Resources', links: [['Test Series', '/explore'], ['Blogs', '/blogs'], ['Leaderboards', '/leaderboard'], ['Revision', '/revision'], ['Plans', '/plans']] },
             { h: 'Company', links: [['Dashboard', loggedIn ? dashHref : '/login'], ['Sign In', '/login'], ['Create Account', '/login?mode=signup'], ['Announcements', '#']] },
           ].map((col) => (
             <div key={col.h} className="flex flex-col gap-3">

@@ -93,7 +93,9 @@ export default function PerformancePage() {
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+            <Link href="/" className="shrink-0" aria-label="ExamOS home">
+              <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+            </Link>
             <span className="font-bold text-xl tracking-tight font-outfit">My Performance</span>
           </div>
         </div>

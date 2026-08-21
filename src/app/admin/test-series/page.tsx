@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
-import { Layers, Plus, Edit3, Trash2, ArrowLeft, Save, X, Building2, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Layers, Plus, Edit3, Trash2, ArrowLeft, Save, X, Building2, Image as ImageIcon, Loader2, Power } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -14,7 +14,7 @@ export default function TestSeriesManagement() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ title: '', description: '', price: 0, tags: '', agencyId: '', examId: '', featured: false, publishAt: '' });
+  const [form, setForm] = useState({ title: '', description: '', price: 0, tags: '', agencyId: '', examId: '', featured: false, publishAt: '', body: '', active: false });
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerFor, setBannerFor] = useState<any>(null);
 
@@ -42,7 +42,7 @@ export default function TestSeriesManagement() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ title: '', description: '', price: 0, tags: '', agencyId: '', examId: '', featured: false, publishAt: '' });
+    setForm({ title: '', description: '', price: 0, tags: '', agencyId: '', examId: '', featured: false, publishAt: '', body: '', active: false });
     setShowForm(true);
   };
 
@@ -56,8 +56,14 @@ export default function TestSeriesManagement() {
       examId: s.examId?._id || s.examId || '',
       featured: !!s.featured,
       publishAt: s.publishAt ? s.publishAt.slice(0, 10) : '',
+      body: '',
+      active: s.active !== false,
     });
     setShowForm(true);
+    // List responses exclude the landing HTML — fetch the full doc for editing.
+    api.get(`/test-series/${s._id}`)
+      .then((res) => setForm((f) => ({ ...f, body: res.data?.body || '' })))
+      .catch(() => {});
   };
 
   const handleSave = async () => {
@@ -82,6 +88,13 @@ export default function TestSeriesManagement() {
     if (!confirm('Delete this test series?')) return;
     try { await api.delete(`/test-series/${id}`); await loadData(); }
     catch (err: any) { alert(err.message); }
+  };
+
+  const toggleActive = async (s: any) => {
+    try {
+      await api.put(`/test-series/${s._id}`, { active: !s.active });
+      await loadData();
+    } catch (err: any) { alert(err.message); }
   };
 
   const handleBannerFile = async (file: File) => {
@@ -146,6 +159,11 @@ export default function TestSeriesManagement() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-bold">{s.title}</span>
+                      {s.active !== false ? (
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">Active</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[10px] font-bold">Draft — hidden from users</span>
+                      )}
                       {s.featured && <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[10px] font-bold">Featured</span>}
                       {s.price > 0 ? <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">₹{s.price}</span> : <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">Free</span>}
                     </div>
@@ -163,6 +181,7 @@ export default function TestSeriesManagement() {
                   </div>
                   <div className="flex gap-2">
                     <Link href={`/admin/test-series/${s._id}`} className="p-2 rounded-xl bg-secondary text-primary hover:bg-primary hover:text-white transition-colors" title="View Tests"><Layers className="w-4 h-4" /></Link>
+                    <button onClick={() => toggleActive(s)} className={`p-2 rounded-xl transition-colors ${s.active !== false ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white' : 'bg-secondary text-muted-foreground hover:bg-amber-500 hover:text-white'}`} title={s.active !== false ? 'Deactivate (hide from users)' : 'Activate (visible to users)'}><Power className="w-4 h-4" /></button>
                     <button onClick={() => setBannerFor(s)} className="p-2 rounded-xl bg-secondary text-orange-500 hover:bg-orange-500 hover:text-white transition-colors" title="Upload banner"><ImageIcon className="w-4 h-4" /></button>
                     <button onClick={() => openEdit(s)} className="p-2 rounded-xl bg-secondary hover:bg-primary hover:text-white transition-colors"><Edit3 className="w-4 h-4" /></button>
                     <button onClick={() => handleDelete(s._id)} className="p-2 rounded-xl bg-secondary text-rose-500 hover:bg-rose-500 hover:text-white"><Trash2 className="w-4 h-4" /></button>
@@ -176,7 +195,7 @@ export default function TestSeriesManagement() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-card w-full max-w-lg p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+          <div className="bg-card w-full max-w-lg p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-bold font-outfit">{editing ? 'Edit Test Series' : 'New Test Series'}</h3>
               <button onClick={() => setShowForm(false)} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>
@@ -204,6 +223,16 @@ export default function TestSeriesManagement() {
                 <label className="text-xs font-semibold text-muted-foreground">Description</label>
                 <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none h-20" />
               </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-muted-foreground">Landing Page Body (HTML)</label>
+                <p className="text-[10px] text-muted-foreground -mt-0.5">Public page content for this series. Script/style/iframes are stripped automatically.</p>
+                <textarea
+                  value={form.body}
+                  onChange={e => setForm({...form, body: e.target.value})}
+                  className="px-4 py-3 rounded-xl border border-border bg-background text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 h-40 resize-y"
+                  placeholder="<h1>SSC CGL 2026 Complete Series</h1>&#10;<p>Everything included in this series...</p>"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-semibold text-muted-foreground">Price (0 = Free)</label>
@@ -224,6 +253,13 @@ export default function TestSeriesManagement() {
                   Featured on home
                 </label>
               </div>
+              <label className="flex items-start gap-2.5 p-3 rounded-xl border border-border bg-muted/20 cursor-pointer">
+                <input type="checkbox" checked={form.active} onChange={e => setForm({...form, active: e.target.checked})} className="w-4 h-4 mt-0.5 accent-emerald-500" />
+                <span>
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1">Visible to users {form.active ? '(Active)' : '(Draft)'}</span>
+                  <span className="text-[10px] text-muted-foreground">Unchecked series stay hidden from students and public pages until you activate them.</span>
+                </span>
+              </label>
             </div>
             <button onClick={handleSave} className="w-full py-3.5 rounded-xl bg-orange-600 text-white font-bold hover:bg-orange-700 flex items-center justify-center gap-2 text-sm"><Save className="w-4 h-4" /> {editing ? 'Update' : 'Create'} Series</button>
           </div>

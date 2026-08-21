@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api, clearAuth, getAuthUser } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import {
@@ -12,8 +12,9 @@ import {
 import QrPayment from '@/components/QrPayment';
 import RazorpayCheckout from '@/components/RazorpayCheckout';
 
-export default function TestSeriesPage() {
+function TestSeriesPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { theme, toggleTheme } = useTheme();
 
   const [user, setUser] = useState<any>(null);
@@ -119,6 +120,24 @@ export default function TestSeriesPage() {
     }, 300);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [searchQuery]);
+
+  // Deep link from public pages: /test-series?enroll=<seriesId> opens checkout
+  // (paid) or enrolls directly (free) once the series list has loaded.
+  const enrollParam = searchParams.get('enroll');
+  const enrollHandled = useRef(false);
+  useEffect(() => {
+    if (!enrollParam || loading || enrollHandled.current || allTestSeries.length === 0) return;
+    enrollHandled.current = true;
+    const ts = allTestSeries.find((t: any) => t._id === enrollParam);
+    router.replace('/test-series');
+    if (!ts) return;
+    if ((ts.price || 0) > 0) {
+      openCheckout({ ...ts, type: 'test_series' });
+    } else {
+      toggleEnroll(ts._id, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enrollParam, loading, allTestSeries]);
 
   const handleLogout = () => {
     clearAuth();
@@ -393,7 +412,9 @@ export default function TestSeriesPage() {
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+            <Link href="/" className="shrink-0" aria-label="ExamOS home">
+              <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+            </Link>
             <span className="font-bold text-xl tracking-tight font-outfit">Test Series</span>
           </div>
         </div>
@@ -615,5 +636,20 @@ export default function TestSeriesPage() {
       </footer>
 
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary during prerendering.
+export default function TestSeriesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary"></div>
+        </div>
+      }
+    >
+      <TestSeriesPageContent />
+    </Suspense>
   );
 }

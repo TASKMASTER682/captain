@@ -63,6 +63,14 @@ function LoginForm() {
     if (ref) setReferralCode(ref);
   }, [searchParams]);
 
+  // Where to send a signed-in student after auth (e.g. back to the series
+  // detail page that sent them here). Only same-site relative paths allowed.
+  const getSafeRedirect = (): string | null => {
+    const r = searchParams.get('redirect');
+    if (!r || !r.startsWith('/') || r.startsWith('//')) return null;
+    return r;
+  };
+
   // Google OAuth callback handling. The backend redirects to /login#provider=google&new=1|0&token=...
   // The token is delivered in the URL hash (not a cookie) so cross-origin production
   // deployments don't lose it to third-party cookie blocking. Existing (non-Google)
@@ -195,7 +203,7 @@ function LoginForm() {
           if (selectedAgencyIds.length) {
             fetchExamsForAgencies(selectedAgencyIds);
           } else {
-            router.push('/dashboard');
+            router.push(getSafeRedirect() || '/dashboard');
           }
         } else {
           setVerifyEmailAddr(email);
@@ -206,7 +214,9 @@ function LoginForm() {
         setAuthToken(res.data.token || res.data.accessToken, res.data.user);
         const user = getAuthUser() || { role: 'User' };
         router.push(
-          user.role === 'Super Admin' ? '/admin/dashboard' : '/dashboard'
+          user.role === 'Super Admin'
+            ? '/admin/dashboard'
+            : getSafeRedirect() || '/dashboard'
         );
       }
     } catch (err: any) {

@@ -58,7 +58,7 @@ export default function AdminDashboard() {
         api.get(`/questions?subject=${subject}&difficulty=${difficulty}&search=${search}`),
         api.get('/questions/staged/all').catch(() => ({ data: [] })),
         api.get('/tests').catch(() => ({ data: [] })),
-        api.get('/users?role=User').catch(() => ({ data: [] })),
+        api.get('/admin/users/stats').catch(() => ({ data: null })),
         api.get('/questions/subjects'),
         api.get('/analytics/revenue').catch(() => ({ data: null })),
       ]);
@@ -69,8 +69,7 @@ export default function AdminDashboard() {
       setSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
       setRevenueData(revRes?.data || null);
 
-      const users = Array.isArray(usersRes.data) ? usersRes.data : [];
-      const candidates = users.filter((u: any) => u.active !== false).length;
+      const candidates = usersRes.data?.candidates ?? 0;
 
       setStats({
         totalQuestions: allQRes.pagination?.total || (Array.isArray(allQRes.data) ? allQRes.data.length : 0) || 0,
@@ -145,7 +144,9 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans transition-colors duration-300">
       <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+          <Link href="/" className="shrink-0" aria-label="ExamOS home">
+            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
+          </Link>
           <span className="font-bold text-xl tracking-tight font-outfit">ExamOS Management</span>
         </div>
         <div className="flex items-center gap-4">

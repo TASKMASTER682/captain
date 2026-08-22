@@ -9,9 +9,10 @@ import {
   Sun, Moon, ArrowRight, LayoutDashboard, ChevronDown, Sparkles, Shield, BarChart2,
   BrainCircuit, Bot, BookOpen, Trophy, Timer, Monitor, Wifi,
   Target, Play, GraduationCap, Flame, Crown, Star, Quote, Cpu,
-  DraftingCompass, Globe, Weight, Layers, TrendingUp, Award
+  DraftingCompass, Globe, Weight, Layers, TrendingUp, Award, Menu, X,
+  ClipboardList, Newspaper, NotebookPen, SquarePen, Bookmark, Zap
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // ---------- Shared animation variants ----------
 const fadeUp = {
@@ -75,46 +76,46 @@ const heroFeatures = [
 
 const featureItems = [
   {
-    icon: Shield,
-    name: 'Authentic CBT Engine',
-    tag: 'Exam Mode',
-    color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
-    text: 'Full-screen lockdown browser, section locking, auto-saving checkpoints and offline resilience — modelled exactly on the real government-standard interface.',
-  },
-  {
-    icon: BarChart2,
-    name: 'Granular Analytics',
-    tag: 'Analysis',
+    icon: Sparkles,
+    name: 'Smart Recommendations',
+    tag: 'Personalised',
     color: 'text-violet-500 bg-violet-500/10 border-violet-500/20',
-    text: 'Rule-based scoring, accuracy index, solving-speed indicators, topic heatmaps and an EER index — all computed on-device, no paid APIs.',
-  },
-  {
-    icon: BrainCircuit,
-    name: 'Spaced Repetition Revision',
-    tag: 'Retention',
-    color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-    text: 'Every mistake is queued into Day 1 · 3 · 7 · 15 · 30 revision cycles so weak concepts resurface right before you forget them.',
+    text: 'Test series, notes and practice sets picked for you — based on your exam, weak topics and daily progress.',
   },
   {
     icon: Bot,
-    name: 'AI-Powered Doubts',
-    tag: 'Doubts',
+    name: 'AI Doubt Solving',
+    tag: '24x7 Help',
     color: 'text-rose-500 bg-rose-500/10 border-rose-500/20',
-    text: 'Stuck on a concept? Ask a doubt and an AI mentor solves it step-by-step with rendered math — plus a community reply thread.',
+    text: 'Stuck on a question? Ask anytime and get an instant step-by-step solution with rendered math and explanations.',
   },
   {
-    icon: Layers,
-    name: 'Study Materials & Blogs',
-    tag: 'Content',
+    icon: SquarePen,
+    name: 'Create Your Own Test',
+    tag: 'Custom Mocks',
+    color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
+    text: 'Build your own mock — choose subjects, topics, number of questions, difficulty level and time limit.',
+  },
+  {
+    icon: Bookmark,
+    name: 'Save Questions from Tests',
+    tag: 'Bookmarks',
     color: 'text-sky-500 bg-sky-500/10 border-sky-500/20',
-    text: 'Notes, PDFs and videos sorted by topic, with editorial blogs and attached materials — everything you need in one library.',
+    text: 'Bookmark tricky questions while attempting any test and revise them later from one place.',
+  },
+  {
+    icon: Zap,
+    name: 'Free Live Tests',
+    tag: 'Live & Free',
+    color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+    text: 'Scheduled live tests taken by thousands of aspirants together — real exam-day competition, completely free.',
   },
   {
     icon: Trophy,
-    name: 'Leaderboards & Streaks',
-    tag: 'Gamified',
+    name: 'Leaderboard & Rankings',
+    tag: 'Compete',
     color: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-    text: 'XP, levels, daily streaks and badges turn preparation into a game. Rank in test leaderboards and keep the flame alive.',
+    text: 'All-India ranks, XP and streaks — see exactly where you stand among toppers every week.',
   },
 ];
 
@@ -171,52 +172,138 @@ export default function Home() {
   }, []);
 
   const dashHref = userRole === 'Super Admin' ? '/admin/dashboard' : '/dashboard';
-  const scrollDown = () => document.getElementById('assurance')?.scrollIntoView({ behavior: 'smooth' });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [featuresGlow, setFeaturesGlow] = useState(false);
+
+  const navLinks = [
+    { label: 'Test Series', href: '/explore' },
+    { label: 'Blogs', href: '/blogs' },
+    { label: 'Mock Tests', href: '#mock-tests' },
+    { label: 'Features', href: '#features' },
+    { label: 'How It Works', href: '#how-it-works' },
+    { label: 'Topper Reviews', href: '#topper-reviews' },
+  ];
+
+  // Smooth-scroll past the sticky header, then flash the section so the
+  // click clearly did something.
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.scrollY - 72;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+    if (id === 'features') {
+      setFeaturesGlow(true);
+      window.setTimeout(() => setFeaturesGlow(false), 1800);
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-background text-foreground flex flex-col font-sans transition-colors duration-300 overflow-x-clip">
 
       {/* Header Navigation */}
-      <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Image src="/logo.png" alt="ExamOS" width={40} height={40} priority className="w-10 h-10 rounded-xl shadow-lg shadow-primary/20 object-cover" />
-          <span className="font-bold text-2xl tracking-tight bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent font-outfit">
-            ExamOS
-          </span>
-        </div>
+      <header className="sticky top-0 z-50 w-full">
+        <div className="glass border-b border-border shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
 
-        <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground font-medium">
-          <Link href="/explore" className="hover:text-foreground transition-colors">Test Series</Link>
-          <a href="#engine" className="hover:text-foreground transition-colors">The Engine</a>
-          <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-          <a href="#how" className="hover:text-foreground transition-colors">How it works</a>
-          <a href="#voices" className="hover:text-foreground transition-colors">Success</a>
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            className="p-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary transition-colors"
-            title="Toggle Theme"
-          >
-            {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-600" />}
-          </button>
-
-          {loggedIn ? (
-            <Link href={dashHref} className="px-4 sm:px-5 py-2.5 rounded-xl bg-primary text-white hover:bg-primary/95 font-medium transition-all shadow-md shadow-primary/20 text-sm flex items-center gap-2">
-              <LayoutDashboard className="w-4 h-4" /> <span className="hidden sm:inline">Dashboard</span>
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2 shrink-0 group">
+              <Image src="/logo.png" alt="ExamOS" width={40} height={40} priority className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl shadow-lg shadow-primary/20 object-cover group-hover:rotate-6 transition-transform duration-300" />
+              <span className="font-bold text-xl sm:text-2xl tracking-tight bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent font-outfit">
+                ExamOS
+              </span>
             </Link>
-          ) : (
-            <>
-              <Link href="/login" className="px-4 sm:px-5 py-2.5 rounded-xl border border-border bg-card text-card-foreground hover:bg-muted font-medium transition-all text-sm">
-                Sign In
-              </Link>
-              <Link href="/login?mode=signup" className="px-4 sm:px-5 py-2.5 rounded-xl bg-primary text-white hover:bg-primary/95 font-medium transition-all shadow-md shadow-primary/20 text-sm">
-                Get Started
-              </Link>
-            </>
-          )}
+
+            {/* Desktop nav — pill links with gradient underline sweep */}
+            <nav className="hidden lg:flex items-center gap-0.5 text-sm font-medium text-muted-foreground">
+              {navLinks.map((l) => (
+                <Link key={l.href} href={l.href} className="group relative px-3.5 py-2 rounded-full hover:text-foreground hover:bg-muted/70 transition-colors">
+                  {l.label}
+                  <span className="absolute inset-x-3.5 bottom-[3px] h-[2px] rounded-full bg-gradient-to-r from-primary to-accent origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-out" />
+                </Link>
+              ))}
+            </nav>
+
+            {/* Right cluster */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <button
+                onClick={toggleTheme}
+                className="p-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary transition-colors"
+                title="Toggle Theme"
+              >
+                {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-600" />}
+              </button>
+
+              {loggedIn ? (
+                <Link href={dashHref} className="hidden sm:flex px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white hover:brightness-110 font-medium transition-all shadow-md shadow-primary/25 text-sm items-center gap-2">
+                  <LayoutDashboard className="w-4 h-4" /> <span className="hidden md:inline">Dashboard</span>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="hidden sm:flex px-4 sm:px-5 py-2.5 rounded-xl border border-border bg-card text-card-foreground hover:bg-muted font-medium transition-all text-sm items-center">
+                    Sign In
+                  </Link>
+                  <Link href="/login?mode=signup" className="hidden sm:flex px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white hover:brightness-110 font-medium transition-all shadow-md shadow-primary/25 text-sm items-center">
+                    Get Started
+                  </Link>
+                </>
+              )}
+
+              {/* Mobile hamburger */}
+              <button
+                onClick={() => setMobileNavOpen((v) => !v)}
+                className="lg:hidden p-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary transition-colors"
+                aria-label="Toggle navigation menu"
+                aria-expanded={mobileNavOpen}
+              >
+                {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Mobile dropdown panel */}
+        <AnimatePresence>
+          {mobileNavOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="lg:hidden absolute top-full inset-x-0 px-4 pt-2"
+            >
+              <div className="rounded-2xl border border-border bg-card/95 backdrop-blur-xl shadow-2xl p-3 flex flex-col gap-1">
+                {navLinks.map((l, i) => (
+                  <motion.div key={l.href} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}>
+                    <Link
+                      href={l.href}
+                      onClick={() => setMobileNavOpen(false)}
+                      className="flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      {l.label}
+                      <ArrowRight className="w-3.5 h-3.5 opacity-40" />
+                    </Link>
+                  </motion.div>
+                ))}
+
+                <div className="h-px bg-border my-2" />
+                {loggedIn ? (
+                  <Link href={dashHref} onClick={() => setMobileNavOpen(false)} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-medium text-sm shadow-md shadow-primary/25">
+                    <LayoutDashboard className="w-4 h-4" /> Go to Dashboard
+                  </Link>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Link href="/login" onClick={() => setMobileNavOpen(false)} className="flex items-center justify-center px-4 py-3 rounded-xl border border-border bg-card font-medium text-sm hover:bg-muted transition-colors">
+                      Sign In
+                    </Link>
+                    <Link href="/login?mode=signup" onClick={() => setMobileNavOpen(false)} className="flex items-center justify-center px-4 py-3 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-medium text-sm shadow-md shadow-primary/25">
+                      Get Started
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* ============ HERO ============ */}
@@ -231,19 +318,19 @@ export default function Home() {
               mobile renders visible immediately for a fast LCP. */}
           <div className="hero-fade-in flex flex-col gap-6">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide w-fit">
-              <Sparkles className="w-3.5 h-3.5" /> THE NEXT-GEN ASSESSMENT PLATFORM
+              <Sparkles className="w-3.5 h-3.5" /> ONLINE EXAM PREPARATION PLATFORM
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold font-outfit leading-[1.05] tracking-tight">
-              Chosen by serious<br className="hidden sm:block" />
-              <span className="shimmer-text bg-gradient-to-r from-primary via-accent to-primary text-transparent"> aspirants</span>,
+              Crack government exams with
+              <span className="shimmer-text bg-gradient-to-r from-primary via-accent to-primary text-transparent"> real mock tests</span>,
               <br className="hidden sm:block" />
-              respected by toppers.
+              free study material &amp; current affairs.
             </h1>
 
             <p className="text-muted-foreground text-lg leading-relaxed max-w-lg">
-              ExamOS is a complete Computer Based Test <span className="font-semibold text-foreground">Operating System</span> — authentic
-              CBT mocks, AI doubt solving, spaced-repetition revision and speed analytics in one habit-forming platform.
+              ExamOS is a complete exam preparation platform — full-length test series, CBT mock tests, study notes,
+              daily current affairs and detailed performance analysis for SSC, Banking, Railways, UPSC and other government exams.
             </p>
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium flex-wrap">
@@ -263,10 +350,10 @@ export default function Home() {
                 {loggedIn ? 'Enter Dashboard' : 'Access Engine'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
               <button
-                onClick={scrollDown}
-                className="w-full sm:w-auto px-8 py-4 rounded-2xl border border-border bg-card text-card-foreground hover:bg-muted font-medium transition-all text-center flex items-center justify-center gap-2"
+                onClick={() => scrollToSection('features')}
+                className="group w-full sm:w-auto px-8 py-4 rounded-2xl border border-border bg-card text-card-foreground hover:bg-muted font-medium transition-all text-center flex items-center justify-center gap-2"
               >
-                Explore Features <ChevronDown className="w-4 h-4" />
+                Explore Features <ChevronDown className="w-4 h-4 text-primary group-hover:translate-y-1 transition-transform" />
               </button>
             </div>
 
@@ -403,14 +490,48 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============ THE ENGINE (assurance / how the mock feels) ============ */}
-      <section id="engine" className="relative py-24">
+      {/* ============ WHAT YOU GET (prep cards — links to signup/dashboard) ============ */}
+      <section className="relative py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <Reveal className="text-center max-w-2xl mx-auto mb-12 flex flex-col gap-4">
+            <span className="mx-auto w-fit px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">EVERYTHING FOR YOUR EXAM PREPARATION</span>
+            <h2 className="text-3xl lg:text-4xl font-extrabold font-outfit">All your exam prep tools, in one place</h2>
+            <p className="text-muted-foreground">Test series, study material, current affairs and performance tracking — start free and prepare for every government exam.</p>
+          </Reveal>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {prepCards.map((c, i) => (
+              <Reveal key={c.title} delay={i}>
+                <Link
+                  href={loggedIn ? dashHref : '/login?mode=signup'}
+                  className="group h-full flex flex-col gap-4 p-6 rounded-3xl border border-border bg-card hover:border-primary/40 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300"
+                >
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${c.color}`}>
+                    <c.icon className="w-6 h-6" />
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-1">
+                    <h3 className="text-base font-bold font-outfit group-hover:text-primary transition-colors">{c.title}</h3>
+                    <p className="text-[13px] text-muted-foreground leading-relaxed">{c.desc}</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-primary mt-auto">
+                    {loggedIn ? 'Open Dashboard' : 'Start Free'}
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                </Link>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ MOCK TESTS (real exam experience) ============ */}
+      <section id="mock-tests" className="relative py-24">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
           <Reveal>
             <div className="flex flex-col gap-5">
-              <span className="w-fit px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">EXAM-MODE SECURITY</span>
+              <span className="w-fit px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">REAL EXAM EXPERIENCE</span>
               <h2 className="text-3xl lg:text-4xl font-extrabold font-outfit leading-tight">
-                An exam room that behaves<br className="hidden sm:block" /> exactly like <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">the real thing</span>
+                Mock tests that feel exactly like<br className="hidden sm:block" /> the <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">real exam hall</span>
               </h2>
               <p className="text-muted-foreground leading-relaxed max-w-lg">
                 Every mock runs inside our locked-down CBT wrapper: fullscreen enforcement, per-section timing with mandatory
@@ -472,12 +593,17 @@ export default function Home() {
       </section>
 
       {/* ============ FEATURES GRID ============ */}
-      <section id="features" className="relative py-24 bg-secondary/50 border-y border-border">
+      <section id="features" className="relative py-24 bg-secondary/50 border-y border-border overflow-hidden">
+        {/* Click feedback glow (triggered from hero "Explore Features") */}
+        <div
+          className={`pointer-events-none absolute inset-0 transition-opacity duration-700 ${featuresGlow ? 'opacity-100' : 'opacity-0'}`}
+          style={{ background: 'radial-gradient(ellipse at top, rgba(124,58,237,0.12), transparent 60%)' }}
+        />
         <div className="max-w-7xl mx-auto px-6">
           <Reveal className="text-center max-w-2xl mx-auto mb-14 flex flex-col gap-4">
-            <span className="mx-auto w-fit px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">EVERYTHING, ONE ENGINE</span>
-            <h2 className="text-3xl lg:text-4xl font-extrabold font-outfit">Built to scale,<br className="sm:hidden" /> designed to perform</h2>
-            <p className="text-muted-foreground">Six modules that together model the real exam, analyse your output, and keep you coming back every day.</p>
+            <span className="mx-auto w-fit px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">ALL PREP TOOLS</span>
+            <h2 className="text-3xl lg:text-4xl font-extrabold font-outfit">Everything you need to crack your exam</h2>
+            <p className="text-muted-foreground">Practice, analysis, revision and daily reading — six modules that cover your entire preparation.</p>
           </Reveal>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -508,7 +634,7 @@ export default function Home() {
       </section>
 
       {/* ============ HOW IT WORKS ============ */}
-      <section id="how" className="relative py-24">
+      <section id="how-it-works" className="relative py-24">
         <div className="max-w-7xl mx-auto px-6">
           <Reveal className="text-center max-w-2xl mx-auto mb-14 flex flex-col gap-4">
             <span className="mx-auto w-fit px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">YOUR DAILY LOOP</span>
@@ -545,10 +671,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
           <Reveal>
             <div className="flex flex-col gap-5 max-w-lg">
-              <span className="w-fit px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-semibold tracking-wide">LEARNING MODE & TRENDS</span>
+              <span className="w-fit px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-semibold tracking-wide">TRACK YOUR PROGRESS</span>
               <h2 className="text-3xl lg:text-4xl font-extrabold font-outfit leading-tight">
-                Learn, then prove it.<br className="hidden sm:block" />
-                <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Your trends tell the story.</span>
+                Practice daily and watch your<br className="hidden sm:block" />
+                <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"> scores improve.</span>
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 Switch between exam-mode mocks and relaxed learning mode, bookmark tough questions, then watch
@@ -627,7 +753,7 @@ export default function Home() {
       </section>
 
       {/* ============ TESTIMONIALS ============ */}
-      <section id="voices" className="relative py-24 bg-secondary/50 border-y border-border">
+      <section id="topper-reviews" className="relative py-24 bg-secondary/50 border-y border-border">
         <div className="max-w-7xl mx-auto px-6">
           <Reveal className="text-center max-w-2xl mx-auto mb-14 flex flex-col gap-4">
             <span className="mx-auto w-fit px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">SUCCESS STORIES</span>
@@ -762,6 +888,34 @@ export default function Home() {
 }
 
 // Data used by sections that need raw arrays
+const prepCards = [
+  {
+    icon: BookOpen, title: 'Study Material',
+    desc: 'Free PDFs, video lectures and topic-wise study material for every government exam.',
+    color: 'text-sky-500 bg-sky-500/10 border-sky-500/20',
+  },
+  {
+    icon: ClipboardList, title: 'Full Length Test Series',
+    desc: 'Full-length CBT mock tests and previous year papers with the real exam interface.',
+    color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
+  },
+  {
+    icon: TrendingUp, title: 'Performance Analysis',
+    desc: 'Speed, accuracy and rank reports that show your weak topics before the real exam.',
+    color: 'text-violet-500 bg-violet-500/10 border-violet-500/20',
+  },
+  {
+    icon: Newspaper, title: 'Current Affairs',
+    desc: 'Daily current affairs updates and quizzes for SSC, Banking, Railways and UPSC.',
+    color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+  },
+  {
+    icon: NotebookPen, title: 'Curated Notes',
+    desc: 'Short revision-ready notes curated by experts and toppers for fast preparation.',
+    color: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+  },
+];
+
 const platformNames = [
   'SSC CGL', 'SSC CHSL', 'IBPS PO', 'IBPS Clerk', 'RRB NTPC', 'SBI PO', 'UPSC Prelims',
   'State PCS', 'Railways', 'Defence', 'LDC', 'Insurance',

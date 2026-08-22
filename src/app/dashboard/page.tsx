@@ -9,13 +9,16 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { 
   Flame, Calendar, BookOpen, Clock, BrainCircuit, BarChart3,
   Play, ClipboardList, LogOut, Sun, Moon, Sparkles, BookMarked,
-  Target, Zap, AlertCircle, RotateCcw,
-  Building2, GraduationCap, Settings, Loader2, CheckCircle, PlusCircle, XCircle, TrendingUp, AlertTriangle,
-  Star, UserCheck, Users, CreditCard, Lock, Megaphone, Copy, Crown,
-  FolderOpen, Trophy, Receipt, User, HelpCircle, Newspaper, ChevronLeft, ChevronRight
+  Target, Zap, AlertCircle, RotateCcw, CreditCard, Loader2, Lock, PlusCircle,
+  Building2, GraduationCap, Settings, CheckCircle, XCircle, TrendingUp, AlertTriangle,
+  Star, UserCheck, Users, Megaphone, Copy, Crown,
+  FolderOpen, Trophy, Receipt, User, HelpCircle, Newspaper, ChevronLeft, ChevronRight, LayoutDashboard, ArrowRight, ChevronDown
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-
+import StudentLayout from '@/components/StudentLayout';
+import { useExploreAgencyId } from '@/components/AgencyContext';
+import AgencyPicker from '@/components/AgencyPicker';
+import GlobalSearch from '@/components/GlobalSearch';
 function getRecMeta(type: string): { icon: LucideIcon; border: string; bg: string; iconBg: string; iconColor: string; badgeColor: string; badgeBg: string; linkColor: string; actionLabel: string } {
   switch (type) {
     case 'Topic Practice':
@@ -59,8 +62,13 @@ function getRecMeta(type: string): { icon: LucideIcon; border: string; bg: strin
 export default function StudentDashboard() {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  // Context-free subscription — immune to module-instance mismatches.
+  const exploreAgencyId = useExploreAgencyId();
 
   const [user, setUser] = useState<any>(null);
+  const [allAgencyList, setAllAgencyList] = useState<any[]>([]);
+
+  const [hotSeries, setHotSeries] = useState<any[]>([]);
 
   // Enrolled test series (populated objects)
   const [enrolledSeries, setEnrolledSeries] = useState<any[]>([]);
@@ -73,9 +81,6 @@ export default function StudentDashboard() {
   const [seriesTests, setSeriesTests] = useState<any[]>([]);
   const [loadingTests, setLoadingTests] = useState(false);
 
-  const [history, setHistory] = useState<any[]>([]);
-  const [historyPage, setHistoryPage] = useState(0);
-  const HISTORY_PAGE_SIZE = 10;
   const [recs, setRecs] = useState<any[]>([]);
   const [weakAreas, setWeakAreas] = useState<any[]>([]);
   const [dailyStats, setDailyStats] = useState<any>({ streak: 0, questionsToday: 0, timeSpentToday: 0, scoreAvg: 0 });
@@ -88,6 +93,51 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [userAgencies, setUserAgencies] = useState<any[]>([]);
   const [userExams, setUserExams] = useState<any[]>([]);
+  const [showStats, setShowStats] = useState(false);
+  const [featuredSeries, setFeaturedSeries] = useState<any[]>([]);
+  const [agencyExams, setAgencyExams] = useState<any[]>([]);
+  const [showAllExams, setShowAllExams] = useState(false);
+  const [examGridCols, setExamGridCols] = useState(3);
+
+  // Collapsed view shows max 2 rows — track the responsive grid column count.
+  useEffect(() => {
+    const update = () => {
+      if (window.innerWidth >= 1024) setExamGridCols(6);
+      else if (window.innerWidth >= 640) setExamGridCols(4);
+      else setExamGridCols(3);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  const examCollapsedLimit = examGridCols * 2;
+
+  // Agency whose exams are shown. The picker's pick wins; otherwise fall back
+  // to the user's own preference agencies (fresh from the server, so a stale
+  // cached user object in localStorage can't hide the section).
+  const preferredAgencyId = exploreAgencyId || userAgencies[0]?._id || null;
+
+  // Exams under the agency currently being explored (UI-only —
+  // preferences are untouched). Re-fetched whenever the pick changes.
+  useEffect(() => {
+    if (!preferredAgencyId) {
+      setAgencyExams([]);
+      return;
+    }
+    setShowAllExams(false);
+    let cancelled = false;
+    api.get(`/exams?agencyId=${preferredAgencyId}`)
+      .then((res: any) => {
+        if (!cancelled) setAgencyExams(Array.isArray(res.data) ? res.data.filter((e: any) => e.active !== false) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setAgencyExams([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferredAgencyId]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -109,9 +159,8 @@ export default function StudentDashboard() {
         ? api.get('/my-analytics/trends?months=6').catch((e: any) => { if (e?.status === 403) setAnalyticsLocked(true); return { data: [] }; })
         : Promise.resolve({ data: [] });
 
-      const [enrolledRes, histRes, recRes, weakRes, dailyRes, trendRes, gamRes, subjRes, allAgenciesRes, allExamsRes, bookmarkRes, annRes] = await Promise.all([
+      const [enrolledRes, recRes, weakRes, dailyRes, trendRes, gamRes, subjRes, allAgenciesRes, allExamsRes, bookmarkRes, annRes, featRes] = await Promise.all([
         api.get('/enrollments/me').catch(() => ({ data: [] })),
-        api.get('/attempts/history').catch(() => ({ data: [] })),
         api.get('/practice/recommendations').catch(() => ({ data: [] })),
         lockedAnalytics,
         api.get('/my-analytics/daily-stats').catch(() => ({ data: null })),
@@ -122,11 +171,14 @@ export default function StudentDashboard() {
         api.get('/exams').catch(() => ({ data: [] })),
         api.get('/bookmarks').catch(() => ({ data: [] })),
         api.get('/announcements/active').catch(() => ({ data: [] })),
+        api.get('/test-series?featured=true').catch(() => ({ data: [] })),
       ]);
       setAnnouncements(Array.isArray(annRes.data) ? annRes.data : []);
+      setFeaturedSeries((Array.isArray(featRes.data) ? featRes.data : []).slice(0, 10));
 
       const agencies = Array.isArray(allAgenciesRes.data) ? allAgenciesRes.data : [];
       const exams = Array.isArray(allExamsRes.data) ? allExamsRes.data : [];
+      setAllAgencyList(agencies);
       setUserAgencies(agencies.filter((a: any) => userAgencyIds.includes(a._id)));
       setUserExams(exams.filter((e: any) => userExamIds.includes(e._id)));
 
@@ -140,10 +192,6 @@ export default function StudentDashboard() {
       setEnrolledIds(enrolledTsIds);
       setEnrolledSeries(enrolledTsObjects);
 
-      const historyData = Array.isArray(histRes.data) ? histRes.data : [];
-      setHistory(historyData);
-      setHistoryPage(0);
-
       const recData = Array.isArray(recRes.data) ? recRes.data : [];
       setRecs(recData);
 
@@ -152,7 +200,8 @@ export default function StudentDashboard() {
 
       setDailyStats(dailyRes.data || { streak: 0, questionsToday: 0, timeSpentToday: 0, scoreAvg: 0 });
       setTrendData(Array.isArray(trendRes.data) ? trendRes.data : []);
-      setGamification(gamRes.data || null);
+      // Only accept a proper payload — an empty array or junk must not render the widget.
+      setGamification(gamRes.data && typeof gamRes.data === 'object' && !Array.isArray(gamRes.data) ? gamRes.data : null);
       setSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
       setBookmarks(Array.isArray(bookmarkRes.data) ? bookmarkRes.data : []);
     } catch (err) { console.error(err); }
@@ -213,6 +262,48 @@ export default function StudentDashboard() {
     }
     setLoadingTests(false);
   };
+
+  function renderFeaturedCard(s: any) {
+    const isBusy = enrolling.has(s._id);
+    const isPaid = (s.price || 0) > 0;
+    return (
+      <div key={s._id} className="min-w-[260px] sm:min-w-[300px] max-w-[320px] shrink-0 snap-start">
+        <Link href={`/explore/${s._id}`} className="block h-full group">
+          <div className="h-full rounded-3xl border border-border bg-card overflow-hidden hover:shadow-xl hover:shadow-primary/15 hover:border-primary/40 transition-all flex flex-col relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+            {s.banner ? (
+              <div className="w-full h-28 overflow-hidden relative">
+                <img src={s.banner} alt={s.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                {s.price > 0 && (
+                  <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm shadow-emerald-500/30">₹{s.price}</span>
+                )}
+              </div>
+            ) : (
+              <div className="w-full h-28 bg-gradient-to-br from-primary/10 via-accent/10 to-primary/5 flex items-center justify-center relative">
+                <GraduationCap className="w-10 h-10 text-primary/30" />
+                {s.price > 0 && (
+                  <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm shadow-emerald-500/30">₹{s.price}</span>
+                )}
+              </div>
+            )}
+            <div className="p-4 flex flex-col gap-2 flex-1">
+              <h3 className="font-bold text-sm font-outfit line-clamp-2 group-hover:text-primary transition-colors">{s.title}</h3>
+              {s.description && <p className="text-[11px] text-muted-foreground line-clamp-2">{s.description}</p>}
+              <div className="flex items-center gap-2 flex-wrap mt-auto pt-2">
+                {s.examId?.name && (
+                  <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">{s.examId.name}</span>
+                )}
+                {s.tags?.slice(0, 2).map((t: string) => (
+                  <span key={t} className="px-2 py-0.5 rounded-full bg-secondary text-[10px] font-medium text-muted-foreground">{t}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Link>
+      </div>
+    );
+  }
 
   function renderTestSeriesCard(ts: any, isEnrolled: boolean) {
     const isBusy = enrolling.has(ts._id);
@@ -356,71 +447,34 @@ export default function StudentDashboard() {
     );
   }
 
-  const totalHistoryPages = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE));
-  const safeHistoryPage = Math.min(historyPage, totalHistoryPages - 1);
-  const historyStart = safeHistoryPage * HISTORY_PAGE_SIZE;
-  const pagedHistory = history.slice(historyStart, historyStart + HISTORY_PAGE_SIZE);
+  // No saved agencies/exams yet (fresh signup) → red "Set Preferences" button
+  // replaces the agency picker until preferences exist.
+  const needsPreferences = userAgencies.length === 0 && userExams.length === 0;
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans transition-colors duration-300">
-      
-      {/* Header */}
-      <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link href="/" className="shrink-0" aria-label="ExamOS home">
-            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
-          </Link>
-          <span className="font-bold text-xl tracking-tight font-outfit">Dashboard</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary transition-colors" title="Toggle Theme">
-            {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-600" />}
-          </button>
-          <div className="text-right hidden sm:block">
-            <div className="text-sm font-semibold">{user.name}</div>
-            <div className="text-xs text-muted-foreground">{user.role} Candidate</div>
-          </div>
-          <button onClick={handleLogout} className="p-2.5 rounded-xl border border-border bg-card text-rose-500 hover:bg-rose-500/10 transition-colors" title="Logout">
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
+    <StudentLayout user={user}>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 pt-8 pb-40 md:pb-8 flex flex-col gap-8">
-        
-        {/* Quick Nav */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link href="/materials" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
-            <FolderOpen className="w-3.5 h-3.5 text-primary" /> Study Materials
+      {/* Global search + Agency explorer — pick an agency to browse its exams (preferences untouched) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {needsPreferences ? (
+          <Link
+            href="/profile"
+            className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-500 hover:bg-rose-500 hover:border-rose-500 hover:text-white text-sm font-bold transition-all shadow-sm group animate-pulse-border"
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Set Your Preferences
+            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </Link>
-          <Link href="/leaderboard" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
-            <Trophy className="w-3.5 h-3.5 text-amber-500" /> Leaderboards
-          </Link>
-          <Link href="/doubts" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
-            <HelpCircle className="w-3.5 h-3.5 text-violet-500" /> Doubts
-          </Link>
-          <Link href="/custom-test" className="px-4 py-2 rounded-xl border border-amber-500/30 bg-amber-500/5 text-xs font-bold hover:border-amber-500/50 hover:bg-amber-500/10 transition-colors flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-amber-500" /> Create Test
-          </Link>
-          <Link href="/blogs" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
-            <Newspaper className="w-3.5 h-3.5 text-sky-500" /> Blogs
-          </Link>
-          <Link href="/orders" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
-            <Receipt className="w-3.5 h-3.5 text-cyan-500" /> My Orders
-          </Link>
-          <Link href="/plans" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
-            <CreditCard className="w-3.5 h-3.5 text-emerald-500" /> Plans & Pricing
-          </Link>
-          <Link href="/profile" className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold hover:border-primary/40 hover:bg-primary/5 transition-colors flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-sky-500" /> Profile
-          </Link>
-          <Link href="/performance" className="px-4 py-2 rounded-xl border border-primary/40 bg-primary/5 text-xs font-bold hover:bg-primary/10 transition-colors flex items-center gap-1.5">
-            <BarChart3 className="w-3.5 h-3.5 text-primary" /> My Performance
-          </Link>
-        </div>
+        ) : (
+          <div className="shrink-0">
+            <AgencyPicker />
+          </div>
+        )}
+        <GlobalSearch className="w-full sm:w-auto sm:flex-1 sm:max-w-xl sm:ml-auto" />
+      </div>
         
         {/* Gamification */}
-        {gamification && (
+        {gamification && typeof gamification === 'object' && !Array.isArray(gamification) && (
           <div className="p-5 rounded-3xl border border-border bg-card flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center font-black text-xl shadow-lg shadow-amber-500/20">
@@ -438,13 +492,20 @@ export default function StudentDashboard() {
               <span className="text-xs font-bold text-rose-500 flex items-center gap-1"><Flame className="w-4 h-4 fill-rose-500" /> {gamification.streak}-day streak</span>
               <span className="text-xs font-bold text-muted-foreground flex items-center gap-1"><Crown className="w-4 h-4 text-amber-500" /> Best: {gamification.bestStreak}</span>
               <div className="flex items-center gap-1.5">
-                {gamification.badges.length > 0 ? gamification.badges.map((b: any) => (
+                {Array.isArray(gamification.badges) && gamification.badges.length > 0 ? gamification.badges.map((b: any) => (
                   <span key={b.code} className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 text-[10px] font-bold" title={b.name}>🏅 {b.name}</span>
                 )) : (
                   <span className="text-[10px] text-muted-foreground">Complete tests to earn badges!</span>
                 )}
               </div>
             </div>
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className="shrink-0 p-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary transition-all"
+              title={showStats ? 'Hide daily stats' : 'Show daily stats'}
+            >
+              <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${showStats ? 'rotate-180' : ''}`} />
+            </button>
           </div>
         )}
 
@@ -475,7 +536,7 @@ export default function StudentDashboard() {
         )}
 
         {/* Daily Goals Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 overflow-hidden transition-all duration-300 ${showStats ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
           <div className="p-4 sm:p-6 rounded-3xl border border-border bg-card flex items-center gap-3 sm:gap-4 relative overflow-hidden shadow-sm">
             <div className="absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-rose-500/5 rounded-full blur-lg"></div>
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center shadow-inner shrink-0">
@@ -522,19 +583,138 @@ export default function StudentDashboard() {
           </Link>
         </div>
 
-        {/* Members-only analytics upgrade prompt (desktop only — mobile bottom bar covers it) */}
-        {analyticsLocked && (
-          <div className="hidden md:flex p-6 rounded-3xl border border-amber-500/20 bg-amber-500/5 flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0"><Crown className="w-5 h-5" /></div>
-              <div>
-                <h3 className="font-bold font-outfit text-sm flex items-center gap-2">Deep Performance Analytics <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[9px] font-bold">MEMBERS</span></h3>
-                <p className="text-xs text-muted-foreground mt-1">Unlock monthly performance trends, accuracy charts and weak-area analysis with a paid plan.</p>
-              </div>
+        {/* Hot Test Series */}
+        {hotSeries.length > 0 && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
+                <Flame className="w-5 h-5 text-rose-500" /> Hot Test Series
+              </h2>
             </div>
-            <Link href="/plans" className="px-5 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-500/95 shadow-md shadow-amber-500/20 flex items-center gap-2 whitespace-nowrap">
-              <Sparkles className="w-3.5 h-3.5" /> Upgrade to Unlock
-            </Link>
+            <div className="flex overflow-x-auto pb-4 gap-4 snap-x hide-scroll">
+              {hotSeries.slice(0, 10).map((ts: any) => (
+                <div key={ts._id} className="min-w-[280px] sm:min-w-[320px] max-w-[320px] shrink-0 snap-start">
+                  <div className="rounded-3xl border border-border bg-card overflow-hidden hover:shadow-xl hover:border-primary/30 transition-all group flex flex-col h-full">
+                    {ts.banner ? (
+                      <div className="w-full h-32 overflow-hidden relative">
+                        <img src={ts.banner} alt={ts.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                        <div className="absolute bottom-3 left-4 text-white text-xs font-bold flex items-center gap-1.5">
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /> Featured
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full h-24 bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute inset-0 bg-black/10"></div>
+                        <div className="text-white text-xs font-bold flex items-center gap-1.5 relative z-10 drop-shadow-md">
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /> Featured
+                        </div>
+                      </div>
+                    )}
+                    <div className="p-5 flex flex-col flex-1 gap-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/10">
+                          {ts.examId?.name || 'Exam'}
+                        </span>
+                        {ts.price === 0 ? (
+                          <span className="text-[10px] font-semibold text-emerald-600 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/10">
+                            Free
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-amber-600 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/10">
+                            ₹{ts.price}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-bold text-base font-outfit line-clamp-2 leading-tight">{ts.title}</h3>
+                      <Link href={`/test-series/${ts._id || ts.slug}`} className="mt-auto pt-3 flex items-center text-xs font-bold text-primary group-hover:text-primary/80 transition-colors">
+                        View Series <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {hotSeries.length > 10 && (
+                <div className="min-w-[150px] shrink-0 snap-start flex items-center justify-center">
+                  <Link href="/test-series" className="flex flex-col items-center gap-2 text-primary hover:text-primary/80 transition-colors group p-4">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <ArrowRight className="w-5 h-5" />
+                    </div>
+                    <span className="text-sm font-bold">See All</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Exams under the explored agency — compact chips, preferences untouched.
+            Hidden entirely until preferences exist (fresh users see only the red button). */}
+        {preferredAgencyId && !needsPreferences && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-bold font-outfit flex items-center gap-2 min-w-0">
+                <Building2 className="w-4 h-4 text-primary shrink-0" />
+                <span className="truncate">
+                  Exams
+                  {(() => {
+                    const ag = allAgencyList.find((a: any) => a._id === preferredAgencyId);
+                    return ag ? <span className="text-primary"> · {ag.code || ag.name}</span> : null;
+                  })()}
+                </span>
+              </h2>
+              <span className="text-[10px] text-muted-foreground font-semibold hidden sm:block shrink-0">Exploring — set your real preferences from Profile</span>
+            </div>
+            {agencyExams.length === 0 ? (
+              <div className="py-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-2xl bg-card">
+                No exams listed under this agency yet.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                  {(showAllExams ? agencyExams : agencyExams.slice(0, examCollapsedLimit)).map((e: any) => (
+                  <Link
+                    key={e._id}
+                    href={`/exams/${e._id}`}
+                    title={e.description || e.name}
+                      className="group p-3 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm transition-all flex flex-col gap-2"
+                    >
+                      <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
+                        <GraduationCap className="w-4 h-4" />
+                      </span>
+                      <span className="text-xs font-bold font-outfit leading-snug line-clamp-2 group-hover:text-primary transition-colors">{e.name}</span>
+                      {e.code && <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide">{e.code}</span>}
+                    </Link>
+                  ))}
+                </div>
+                {agencyExams.length > examCollapsedLimit && (
+                  <button
+                    onClick={() => setShowAllExams(v => !v)}
+                    className="self-center px-5 py-2 rounded-xl border border-border bg-card text-xs font-bold text-primary hover:bg-primary/5 transition-colors flex items-center gap-1.5"
+                  >
+                    {showAllExams ? 'Show Less' : `Show More (${agencyExams.length - examCollapsedLimit})`}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${showAllExams ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Featured Test Series */}
+        {featuredSeries.length > 0 && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold font-outfit flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500 fill-amber-500" /> Featured Test Series
+              </h2>
+              <Link href="/test-series" className="text-xs font-bold text-primary hover:underline flex items-center gap-1">
+                See All <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="flex overflow-x-auto pb-2 gap-4 snap-x hide-scroll">
+              {featuredSeries.map((s: any) => renderFeaturedCard(s))}
+            </div>
           </div>
         )}
 
@@ -565,66 +745,12 @@ export default function StudentDashboard() {
         )}
 
         {/* Main body grids */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="flex flex-col gap-8">
           
-          {/* Left column (2/3) */}
-          <div className="lg:col-span-2 flex flex-col gap-8">
+          {/* Main Content */}
+          <div className="flex flex-col gap-8">
 
-            {/* Preferences */}
-            {(userAgencies.length > 0 || userExams.length > 0) ? (
-              <div className="p-5 rounded-3xl border border-border bg-card shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-bold font-outfit flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-primary" /> Your Preferences
-                  </h2>
-                  <Link href="/profile" className="text-[10px] font-semibold text-primary hover:underline">Change →</Link>
-                </div>
-                <div className="flex flex-col gap-3">
-                  {userAgencies.length > 0 && (
-                    <div className="flex items-start gap-2">
-                      <Building2 className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                      <div className="flex flex-wrap gap-1.5">
-                        {userAgencies.map((a: any) => (
-                          <span key={a._id} className="px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-600 text-[11px] font-semibold border border-cyan-500/10">{a.name}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {userExams.length > 0 && (
-                    <div className="flex items-start gap-2">
-                      <GraduationCap className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                      <div className="flex flex-wrap gap-1.5">
-                        {userExams.map((e: any) => (
-                          <span key={e._id} className="px-2.5 py-1 rounded-lg bg-violet-500/10 text-violet-600 text-[11px] font-semibold border border-violet-500/10">{e.name}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="p-5 rounded-3xl border border-dashed border-border bg-card shadow-sm text-center">
-                <p className="text-xs text-muted-foreground mb-2">No agencies or exams selected yet.</p>
-                <Link href="/profile" className="text-xs font-bold text-primary hover:underline">Select your preferences →</Link>
-              </div>
-            )}
 
-            {/* Explore Test Series */}
-            <Link
-              href="/test-series"
-              className="group p-5 rounded-3xl border-2 border-rose-500/60 bg-gradient-to-br from-rose-500/10 via-card to-card shadow-[0_0_25px_-5px_rgba(244,63,94,0.6)] flex items-center justify-between gap-4 hover:border-rose-500 hover:shadow-[0_0_40px_-5px_rgba(244,63,94,0.8)] transition-all animate-pulse-glow"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-colors">
-                  <Star className="w-6 h-6" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="font-bold font-outfit">Recommended Test Series</h2>
-                  <p className="text-xs text-muted-foreground truncate">Browse recommended series & search for more</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-rose-500 group-hover:text-rose-600 group-hover:translate-x-1 transition-all shrink-0" />
-            </Link>
 
             {/* Enrolled Section */}
             <div className="flex flex-col gap-4">
@@ -643,250 +769,8 @@ export default function StudentDashboard() {
                 </div>
               )}
             </div>
-
-            {/* Previous Attempts */}
-            <div id="submissions" className="flex flex-col gap-4 scroll-mt-24">
-              <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-indigo-500" /> Previous Test Submissions
-              </h2>
-              <div className="border border-border rounded-3xl overflow-hidden bg-card shadow-sm">
-                {history.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-                    <ClipboardList className="w-8 h-8 text-muted-foreground/30" />
-                    <span>No mock tests completed yet. Start your first attempt above.</span>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-border bg-secondary/30 text-muted-foreground font-semibold text-xs uppercase tracking-wider">
-                          <th className="px-6 py-4">Test Title</th>
-                          <th className="px-6 py-4">Completed On</th>
-                          <th className="px-6 py-4">Score</th>
-                          <th className="px-6 py-4">Accuracy</th>
-                          <th className="px-6 py-4">Percentile</th>
-                          <th className="px-6 py-4 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pagedHistory.map((h) => (
-                          <tr key={h._id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                            <td className="px-6 py-4 font-semibold">{h.testId?.title || 'Mock Test'}</td>
-                            <td className="px-6 py-4 text-muted-foreground text-xs">
-                              {new Date(h.submittedAt || h.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 font-bold text-primary">{h.score} pts</td>
-                            <td className="px-6 py-4 font-medium text-indigo-500">{Math.round(h.accuracy)}%</td>
-                            <td className="px-6 py-4 font-medium text-emerald-500">{h.percentile}%ile</td>
-                            <td className="px-6 py-4 text-right">
-                              <Link href={`/cbt/results/${h._id}`}
-                                className="inline-flex px-3.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors"
-                              >View Report</Link>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {history.length > HISTORY_PAGE_SIZE && (
-                  <div className="flex items-center justify-between px-5 py-3 border-t border-border gap-3">
-                    <span className="text-xs text-muted-foreground">
-                      Showing {historyStart + 1}–{Math.min(historyStart + HISTORY_PAGE_SIZE, history.length)} of {history.length} submissions
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}
-                        disabled={safeHistoryPage === 0}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" /> Prev
-                      </button>
-                      <span className="text-xs font-semibold text-muted-foreground">Page {safeHistoryPage + 1} of {totalHistoryPages}</span>
-                      <button
-                        onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages - 1, p + 1))}
-                        disabled={safeHistoryPage >= totalHistoryPages - 1}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        Next <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
           </div>
-
-          {/* Sidebar (1/3) */}
-          <div className="flex flex-col gap-6">
-            
-            {/* Bookmarked Questions */}
-            <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4 shadow-sm">
-              <h2 className="text-lg font-bold font-outfit flex items-center gap-2">
-                <BookMarked className="w-5 h-5 text-amber-500" /> Bookmarked Questions
-              </h2>
-              {bookmarks.length === 0 ? (
-                <div className="text-center text-sm text-muted-foreground flex flex-col items-center gap-2 py-4">
-                  <BookMarked className="w-8 h-8 text-muted-foreground/30" />
-                  <span className="text-xs">No bookmarked questions yet.</span>
-                  <Link href="/practice" className="text-xs font-bold text-primary hover:underline">
-                    Go to Practice →
-                  </Link>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2.5">
-                  {bookmarks.slice(0, 4).map((bm: any) => {
-                    const q = bm.questionId || {};
-                    return (
-                      <Link 
-                        key={bm._id}
-                        href={`/practice?subject=${encodeURIComponent(q.subject || '')}&topic=${encodeURIComponent(q.topic || '')}`}
-                        className="p-3 rounded-xl border border-border bg-background hover:border-primary/30 hover:bg-muted/50 transition-all flex items-center justify-between gap-2 group"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold leading-snug line-clamp-1">{q.body || 'Question'}</p>
-                          <span className="text-[10px] text-muted-foreground">{q.subject}{q.subject && q.topic ? ' · ' : ''}{q.topic}</span>
-                        </div>
-                        <Play className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                      </Link>
-                    );
-                  })}
-                  {bookmarks.length > 4 && (
-                    <Link href="/practice" className="text-xs font-bold text-primary hover:underline text-center pt-1">
-                      View all {bookmarks.length} bookmarked →
-                    </Link>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Recommendations */}
-            <div id="recommendations" className="p-6 rounded-3xl border border-primary/20 bg-gradient-to-br from-card to-primary/5 flex flex-col gap-4 shadow-sm relative overflow-hidden scroll-mt-24">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-full blur-md"></div>
-              <h2 className="text-lg font-bold font-outfit flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" /> Smart Recommendations
-              </h2>
-              <p className="text-xs text-muted-foreground">Personalized study actions based on your performance data:</p>
-              <div className="flex flex-col gap-3 mt-1">
-                {recs.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2">Complete a test to unlock personalized recommendations.</p>
-                ) : (() => {
-                  const topicRecs = recs.filter(r => r.type === 'Topic Practice');
-                  const speedRecs = recs.filter(r => r.type === 'Speed Boost');
-                  const otherRecs = recs.filter(r => r.type !== 'Topic Practice' && r.type !== 'Speed Boost');
-                  return (<>
-                    {topicRecs.length > 0 && (
-                      <div className="p-4 rounded-2xl border border-rose-500/20 bg-rose-500/[0.03] flex flex-col gap-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
-                            <Target className="w-4 h-4 text-rose-500" />
-                          </div>
-                          <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/10">Weak Topics</span>
-                        </div>
-                        <h4 className="font-bold text-sm leading-snug">Practice these topics to improve accuracy</h4>
-                        <div className="flex flex-col gap-1.5">
-                          {topicRecs.map((rec, i) => {
-                            const topicName = rec.title.replace('Improve Accuracy: ', '');
-                            return (
-                              <Link key={i} href={rec.action}
-                                className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-background hover:bg-rose-500/5 border border-border hover:border-rose-500/20 transition-all group"
-                              >
-                                <span className="text-xs font-semibold group-hover:text-rose-500 transition-colors">{topicName}</span>
-                                <span className="text-[10px] text-rose-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Practice →</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    {speedRecs.length > 0 && (
-                      <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/[0.03] flex flex-col gap-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                            <Zap className="w-4 h-4 text-amber-500" />
-                          </div>
-                          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10">Slow Topics</span>
-                        </div>
-                        <h4 className="font-bold text-sm leading-snug">Improve solving speed on these topics</h4>
-                        <div className="flex flex-col gap-1.5">
-                          {speedRecs.map((rec, i) => {
-                            const topicName = rec.title.replace('Optimize Timing: ', '');
-                            return (
-                              <Link key={i} href={rec.action}
-                                className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-background hover:bg-amber-500/5 border border-border hover:border-amber-500/20 transition-all group"
-                              >
-                                <span className="text-xs font-semibold group-hover:text-amber-600 transition-colors">{topicName}</span>
-                                <span className="text-[10px] text-amber-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Practice →</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    {otherRecs.map((rec, index) => {
-                      const meta = getRecMeta(rec.type);
-                      const Icon = meta.icon;
-                      return (
-                        <div key={index} className={`p-4 rounded-2xl border ${meta.border} ${meta.bg} flex flex-col gap-2.5`}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg ${meta.iconBg} flex items-center justify-center shrink-0`}>
-                              <Icon className={`w-4 h-4 ${meta.iconColor}`} />
-                            </div>
-                            <span className={`text-[10px] font-bold ${meta.badgeColor} uppercase tracking-wider px-2 py-0.5 rounded ${meta.badgeBg}`}>{rec.type}</span>
-                          </div>
-                          <h4 className="font-bold text-sm leading-snug">{rec.title}</h4>
-                          <p className="text-xs text-muted-foreground leading-relaxed">{rec.description}</p>
-                          <Link href={rec.action} className={`text-xs font-bold ${meta.linkColor} hover:underline mt-0.5 inline-flex items-center gap-1`}>
-                            {meta.actionLabel} →
-                          </Link>
-                        </div>
-                      );
-                    })}
-                  </>);
-                })()}
-              </div>
-            </div>
-
-            {/* Weak Areas */}
-            {weakAreas.length > 0 && (
-              <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4 shadow-sm">
-                <h2 className="text-lg font-bold font-outfit flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-rose-500" /> Areas Needing Attention
-                </h2>
-                <div className="flex flex-col gap-3">
-                  {weakAreas.map((area: any, idx: number) => (
-                    <div key={idx} className="p-3.5 rounded-2xl border border-rose-500/20 bg-rose-500/5 flex justify-between items-center text-xs">
-                      <span className="font-bold">{area.topic || area.subject}</span>
-                      <span className="text-rose-500 font-mono font-bold">{Math.round(area.accuracy)}% Acc</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Infinite Practice */}
-            <div id="infinite-practice" className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4 shadow-sm scroll-mt-24">
-              <h2 className="text-lg font-bold font-outfit flex items-center gap-2">
-                <BookMarked className="w-5 h-5 text-indigo-500" /> Infinite Practice Module
-              </h2>
-              <p className="text-xs text-muted-foreground">Select a subject to start a randomized adaptive session:</p>
-              {subjects.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Enroll in a test series to unlock practice subjects for it.</p>
-              ) : (
-                subjects.slice(0, 6).map((s: string) => (
-                  <Link key={s} href={`/practice?subject=${encodeURIComponent(s)}`}
-                    className="w-full p-3 rounded-xl border border-border hover:border-indigo-500 bg-background text-left text-sm font-semibold transition-all hover:bg-indigo-500/5 block"
-                  >{s}</Link>
-                ))
-              )}
-            </div>
-
-          </div>
-
         </div>
-
-      </main>
 
       {/* Mobile droplet quick-access bottom bar — students only, staff/admin skip it */}
       {!['Super Admin', 'Content Manager', 'Support'].includes(user?.role) && (
@@ -955,7 +839,6 @@ export default function StudentDashboard() {
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground mt-auto">
         Powered by ExamOS CBT Engine. All algorithms run locally.
       </footer>
-
-    </div>
+    </StudentLayout>
   );
 }

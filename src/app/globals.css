@@ -201,8 +201,14 @@ body {
 }
 .animate-droplet { animation: droplet-bob 2.8s ease-in-out infinite; }
 
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45); }
+  50% { box-shadow: 0 0 0 5px rgba(244, 63, 94, 0); }
+}
+.animate-pulse-border { animation: pulse-border 2s ease-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-float, .animate-float-slow, .animate-glow, .animate-shimmer, .animate-marquee, .animate-blink, .animate-droplet {
+  .animate-float, .animate-float-slow, .animate-glow, .animate-shimmer, .animate-marquee, .animate-blink, .animate-droplet, .animate-pulse-border {
     animation: none;
   }
 }

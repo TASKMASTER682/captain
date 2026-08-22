@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { api, clearAuth, getAuthUser } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ChevronLeft, LogOut, Sun, Moon, Loader2, ClipboardList, BarChart3, Trophy, Target } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, Sun, Moon, Loader2, ClipboardList, BarChart3, Trophy, Target } from 'lucide-react';
 
 export default function PerformancePage() {
   const router = useRouter();
@@ -15,6 +15,8 @@ export default function PerformancePage() {
   const [user, setUser] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyPage, setHistoryPage] = useState(0);
+  const HISTORY_PAGE_SIZE = 10;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -43,6 +45,11 @@ export default function PerformancePage() {
   };
 
   const attempts = history;
+
+  const totalHistoryPages = Math.max(1, Math.ceil(attempts.length / HISTORY_PAGE_SIZE));
+  const safeHistoryPage = Math.min(historyPage, totalHistoryPages - 1);
+  const historyStart = safeHistoryPage * HISTORY_PAGE_SIZE;
+  const pagedAttempts = attempts.slice(historyStart, historyStart + HISTORY_PAGE_SIZE);
 
   // Chronological trend (oldest -> latest)
   const chartData = [...attempts].reverse().map((h: any, i: number) => ({
@@ -224,43 +231,74 @@ export default function PerformancePage() {
               </div>
             )}
 
-            {/* Recent attempts */}
+            {/* Previous Test Submissions */}
             <div className="flex flex-col gap-4">
               <h2 className="text-xl font-bold font-outfit flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-indigo-500" /> Recent Attempts
+                <ClipboardList className="w-5 h-5 text-indigo-500" /> Previous Test Submissions
               </h2>
               <div className="border border-border rounded-3xl overflow-hidden bg-card shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-border bg-secondary/30 text-muted-foreground font-semibold text-xs uppercase tracking-wider">
-                        <th className="px-6 py-4">Test Title</th>
-                        <th className="px-6 py-4">Completed On</th>
-                        <th className="px-6 py-4">Score</th>
-                        <th className="px-6 py-4">Accuracy</th>
-                        <th className="px-6 py-4">Percentile</th>
-                        <th className="px-6 py-4 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {attempts.slice(0, 10).map((h: any) => (
-                        <tr key={h._id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                          <td className="px-6 py-4 font-semibold">{h.testId?.title || 'Mock Test'}</td>
-                          <td className="px-6 py-4 text-muted-foreground text-xs">{new Date(h.submittedAt || h.createdAt).toLocaleDateString()}</td>
-                          <td className="px-6 py-4 font-bold text-primary">{h.score} pts</td>
-                          <td className="px-6 py-4 font-medium text-indigo-500">{Math.round(h.accuracy)}%</td>
-                          <td className="px-6 py-4 font-medium text-emerald-500">{h.percentile}%ile</td>
-                          <td className="px-6 py-4 text-right">
-                            <Link href={`/cbt/results/${h._id}`} className="inline-flex px-3.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors">
-                              View Report
-                            </Link>
-                          </td>
+                {attempts.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+                    <ClipboardList className="w-8 h-8 text-muted-foreground/30" />
+                    <span>No mock tests completed yet.</span>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-border bg-secondary/30 text-muted-foreground font-semibold text-xs uppercase tracking-wider">
+                          <th className="px-6 py-4">Test Title</th>
+                          <th className="px-6 py-4">Completed On</th>
+                          <th className="px-6 py-4">Score</th>
+                          <th className="px-6 py-4">Accuracy</th>
+                          <th className="px-6 py-4">Percentile</th>
+                          <th className="px-6 py-4 text-right">Action</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {pagedAttempts.map((h: any) => (
+                          <tr key={h._id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                            <td className="px-6 py-4 font-semibold">{h.testId?.title || 'Mock Test'}</td>
+                            <td className="px-6 py-4 text-muted-foreground text-xs">{new Date(h.submittedAt || h.createdAt).toLocaleDateString()}</td>
+                            <td className="px-6 py-4 font-bold text-primary">{h.score} pts</td>
+                            <td className="px-6 py-4 font-medium text-indigo-500">{Math.round(h.accuracy)}%</td>
+                            <td className="px-6 py-4 font-medium text-emerald-500">{h.percentile}%ile</td>
+                            <td className="px-6 py-4 text-right">
+                              <Link href={`/cbt/results/${h._id}`} className="inline-flex px-3.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors">
+                                View Report
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
+              {attempts.length > HISTORY_PAGE_SIZE && (
+                <div className="flex items-center justify-between px-5 py-3 border-t border-border gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    Showing {historyStart + 1}–{Math.min(historyStart + HISTORY_PAGE_SIZE, attempts.length)} of {attempts.length} submissions
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}
+                      disabled={safeHistoryPage === 0}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" /> Prev
+                    </button>
+                    <span className="text-xs font-semibold text-muted-foreground">Page {safeHistoryPage + 1} of {totalHistoryPages}</span>
+                    <button
+                      onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages - 1, p + 1))}
+                      disabled={safeHistoryPage >= totalHistoryPages - 1}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Next <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

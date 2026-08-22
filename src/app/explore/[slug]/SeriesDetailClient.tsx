@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getAuthUser } from '@/lib/api';
 import PublicHeader from '@/components/PublicHeader';
 import {
-  CreditCard, Lock, GraduationCap, CheckCircle2, IndianRupee,
+  Lock, GraduationCap, CheckCircle2, IndianRupee,
+  Play, Clock, ChevronDown, ChevronUp, Loader2, BookOpenCheck,
 } from 'lucide-react';
 
 // Defense-in-depth: the backend already sanitizes on write + read, but strip
@@ -31,15 +32,47 @@ export default function SeriesDetailClient({ series }: { series: any }) {
   const isFree = price <= 0;
   const detailPath = `/explore/${series.slug || series._id}`;
 
+  const [showTests, setShowTests] = useState(false);
+  const [tests, setTests] = useState<any[]>([]);
+  const [loadingTests, setLoadingTests] = useState(false);
+
   const handleBuy = () => {
     const user = getAuthUser();
     if (!user) {
-      // Not signed in → signup page, then return here.
       router.push(`/login?mode=signup&redirect=${encodeURIComponent(detailPath)}`);
       return;
     }
-    // Signed in → checkout (the test-series page auto-opens checkout for ?enroll=).
     router.push(`/test-series?enroll=${series._id}`);
+  };
+
+  const toggleTests = async () => {
+    if (showTests) {
+      setShowTests(false);
+      return;
+    }
+    setShowTests(true);
+    setLoadingTests(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/tests?testSeriesId=${series._id}`);
+      const json = await res.json();
+      setTests(Array.isArray(json.data) ? json.data : []);
+    } catch {
+      setTests([]);
+    }
+    setLoadingTests(false);
+  };
+
+  const handleStartTest = (test: any) => {
+    const user = getAuthUser();
+    if (!user) {
+      router.push(`/login?mode=signup&redirect=${encodeURIComponent(`/cbt/${test._id}`)}`);
+      return;
+    }
+    if (test.isLocked) {
+      router.push(`/test-series?enroll=${series._id}`);
+      return;
+    }
+    router.push(`/cbt/${test._id}`);
   };
 
   return (
@@ -90,7 +123,7 @@ export default function SeriesDetailClient({ series }: { series: any }) {
                   ))}
                 </div>
               )}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-2 border-t border-border mt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2 border-t border-border mt-2">
                 <div className="flex items-baseline gap-1.5">
                   {isFree ? (
                     <span className="text-2xl font-black font-outfit text-emerald-600">Free</span>
@@ -102,20 +135,79 @@ export default function SeriesDetailClient({ series }: { series: any }) {
                     </>
                   )}
                 </div>
-                <button
-                  onClick={handleBuy}
-                  className={`sm:ml-auto w-full sm:w-auto px-8 py-3.5 rounded-xl text-white text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${
-                    isFree
-                      ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25'
-                      : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/25'
-                  }`}
-                >
-                  {isFree ? <><CheckCircle2 className="w-4 h-4" /> Enroll for Free</> : <><CreditCard className="w-4 h-4" /> Buy This Series</>}
-                </button>
+                <div className="flex items-center gap-2 sm:ml-auto">
+                  <button
+                    onClick={toggleTests}
+                    className="w-full sm:w-auto px-5 py-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    {showTests ? <><ChevronUp className="w-4 h-4" /> Hide Tests</> : <><ChevronDown className="w-4 h-4" /> View Tests</>}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </section>
+
+        {/* Tests List Section */}
+        {showTests && (
+          <section className="max-w-5xl mx-auto w-full px-6 py-6">
+            <h2 className="text-xl font-bold font-outfit mb-4 flex items-center gap-2">
+              <BookOpenCheck className="w-5 h-5 text-primary" /> Tests in this Series
+            </h2>
+            {loadingTests ? (
+              <div className="py-10 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" /> Loading tests...
+              </div>
+            ) : tests.length === 0 ? (
+              <div className="py-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-3xl bg-card">
+                No tests in this series yet.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {tests.slice(0, 5).map((test: any) => (
+                  <div key={test._id} className="p-5 rounded-2xl border border-border bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-primary/30 transition-colors">
+                    <div className="flex flex-col gap-1 flex-1">
+                      <h3 className="font-bold text-sm font-outfit flex items-center gap-2">
+                        {test.title}
+                        {test.memberOnly && <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[9px] font-bold">MEMBERS</span>}
+                        {test.isFree && !test.memberOnly && <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 text-[9px] font-bold">FREE</span>}
+                      </h3>
+                      {test.description && <p className="text-xs text-muted-foreground line-clamp-1">{test.description}</p>}
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1.5 flex-wrap">
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{test.duration} min</span>
+                        <span>Sections: {test.sections?.length || 0}</span>
+                        {test.attemptLimit ? <span>Attempts: {test.attemptLimit}</span> : null}
+                      </div>
+                    </div>
+                    {test.isLocked || test.memberOnly ? (
+                      <button
+                        onClick={() => handleStartTest(test)}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-medium hover:bg-amber-500/95 shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 whitespace-nowrap"
+                      >
+                        <Lock className="w-4 h-4" /> Upgrade to Unlock
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleStartTest(test)}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/95 shadow-md shadow-primary/20 flex items-center justify-center gap-2 whitespace-nowrap"
+                      >
+                        <Play className="w-4 h-4 fill-white" /> Start CBT
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {tests.length > 5 && (
+                  <div className="py-4 text-center text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-secondary border border-border">
+                      <Lock className="w-3.5 h-3.5" />
+                      {tests.length - 5} more tests — enroll to unlock all
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Landing body HTML */}
         <section className="max-w-5xl mx-auto w-full px-6 py-10">

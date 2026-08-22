@@ -109,8 +109,8 @@ export default function RazorpayCheckout({
   }, [keyId, orderId, razorpayOrderId, amount, itemName, onSuccess, onCancel]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+      <div className="bg-card w-full max-w-md p-5 sm:p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-bold font-outfit">Secure Payment</h3>
           <button onClick={onCancel} className="p-1.5 rounded hover:bg-secondary"><X className="w-5 h-5" /></button>

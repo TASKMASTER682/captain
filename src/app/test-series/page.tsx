@@ -261,13 +261,14 @@ function TestSeriesPageContent() {
     const isBusy = enrolling.has(ts._id);
     const isPaid = ts.price > 0;
     const showBuy = isPaid && !isEnrolled;
+    const isExpanded = expandedSeriesId === ts._id;
     return (
       <div key={ts._id} className="rounded-3xl border border-border bg-card overflow-hidden hover:shadow-md transition-shadow">
-        <div
-          className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-muted/20 transition-colors"
-          onClick={() => toggleSeries(ts._id)}
-        >
-          <div className="flex flex-col gap-1 flex-1 min-w-0">
+        <div className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div
+            className="flex flex-col gap-1 flex-1 min-w-0 cursor-pointer"
+            onClick={() => toggleSeries(ts._id)}
+          >
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/10">
                 {ts.examId?.name || 'Exam'}
@@ -318,11 +319,10 @@ function TestSeriesPageContent() {
                 {isBusy ? '' : isEnrolled ? 'Unenroll' : showBuy ? 'Buy Full Series' : 'Enroll'}
               </button>
             )}
-            <span className="text-xs text-muted-foreground font-semibold">{expandedSeriesId === ts._id ? '▲' : '▼'}</span>
           </div>
         </div>
 
-        {expandedSeriesId === ts._id && (
+        {isExpanded && (
           <div className="border-t border-border bg-muted/10 p-5">
             {loadingTests ? (
               <div className="py-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
@@ -577,8 +577,8 @@ function TestSeriesPageContent() {
 
       {/* Checkout Modal */}
       {checkoutItem && !qrPayment && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-card w-full max-w-md p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-card w-full max-w-md p-5 sm:p-8 rounded-3xl border border-border shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-bold font-outfit flex items-center gap-2">
                 <Lock className="w-5 h-5 text-primary" /> Checkout
@@ -600,12 +600,12 @@ function TestSeriesPageContent() {
             {/* Coupon */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1"><Ticket className="w-3.5 h-3.5" /> Coupon Code</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  placeholder="Enter coupon" className="flex-1 px-4 py-3 rounded-xl border border-border bg-background text-sm font-bold tracking-wider uppercase"
+                  placeholder="Enter coupon" className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-border bg-background text-sm font-bold tracking-wider uppercase"
                 />
-                <button onClick={applyCoupon} className="px-4 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95">Apply</button>
+                <button onClick={applyCoupon} className="px-6 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 shrink-0">Apply</button>
               </div>
               {couponInfo && <p className="text-[11px] text-emerald-500 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {couponInfo.code} applied — you save ₹{couponInfo.discount}</p>}
               {couponError && <p className="text-[11px] text-rose-500 font-semibold">{couponError}</p>}

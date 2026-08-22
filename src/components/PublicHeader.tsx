@@ -59,7 +59,7 @@ export default function PublicHeader({ cta }: { cta?: React.ReactNode }) {
 
         {/* Right cluster */}
         <div className="flex items-center gap-2 shrink-0 min-w-0">
-          {cta && <div className="hidden sm:block">{cta}</div>}
+          {cta && <div className="block">{cta}</div>}
 
           <button
             onClick={toggleTheme}

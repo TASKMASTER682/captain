@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { API_BASE } from '@/lib/config';
 import PublicHeader from '@/components/PublicHeader';
 import {
@@ -26,11 +27,12 @@ function PriceBadge({ price }: { price: number }) {
   );
 }
 
-export default function ExplorePage() {
+function ExplorePageContent() {
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<any[]>([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
   const [page, setPage] = useState(1);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => searchParams.get('q') || '');
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<NodeJS.Timeout | null>(null);
@@ -256,5 +258,14 @@ export default function ExplorePage() {
         Powered by ExamOS CBT Engine. All algorithms run locally.
       </footer>
     </div>
+  );
+}
+
+// useSearchParams needs a Suspense boundary for prerendering.
+export default function ExplorePage() {
+  return (
+    <Suspense fallback={null}>
+      <ExplorePageContent />
+    </Suspense>
   );
 }

@@ -250,7 +250,7 @@ export default function TestSeriesManagement() {
                 </div>
                 <label className="flex items-center gap-2 pt-7 text-xs font-semibold text-muted-foreground cursor-pointer">
                   <input type="checkbox" checked={form.featured} onChange={e => setForm({...form, featured: e.target.checked})} className="w-4 h-4 accent-amber-500" />
-                  Featured on home
+                  Featured on dashboard
                 </label>
               </div>
               <label className="flex items-start gap-2.5 p-3 rounded-xl border border-border bg-muted/20 cursor-pointer">

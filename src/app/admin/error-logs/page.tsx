@@ -1,10 +1,12 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { ArrowLeft, Bug, RefreshCw, ChevronDown, ChevronUp, CheckCircle2, Trash2, XCircle, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 const STATUS_FILTERS = ['All', 'Unresolved', 'Resolved', 'Ignored'];
 const SOURCE_FILTERS = ['All', 'client', 'server'];
@@ -12,6 +14,7 @@ const SOURCE_FILTERS = ['All', 'client', 'server'];
 export default function ErrorLogs() {
   const router = useRouter();
   const [logs, setLogs] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [unresolved, setUnresolved] = useState(0);
@@ -23,8 +26,8 @@ export default function ErrorLogs() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, page, status, source, q]);
@@ -68,18 +71,7 @@ export default function ErrorLogs() {
   const totalPages = Math.max(1, Math.ceil(total / 20));
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <Bug className="w-5 h-5 text-rose-500" />
-          <h1 className="font-bold text-lg font-outfit">Error Logs</h1>
-          {unresolved > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 text-[10px] font-bold">{unresolved} unresolved</span>
-          )}
-        </div>
-        <button onClick={load} className="p-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700"><RefreshCw className="w-4 h-4" /></button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -161,6 +153,6 @@ export default function ErrorLogs() {
           </div>
         )}
       </main>
-    </div>
+    </AdminLayout>
   );
 }

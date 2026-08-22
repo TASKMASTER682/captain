@@ -1,19 +1,22 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { ArrowLeft, ScrollText, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function AuditLogs() {
   const router = useRouter();
   const [logs, setLogs] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
     load();
   }, [router]);
 
@@ -27,15 +30,7 @@ export default function AuditLogs() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <ScrollText className="w-5 h-5 text-indigo-500" />
-          <h1 className="font-bold text-lg font-outfit">Audit Logs</h1>
-        </div>
-        <button onClick={load} className="p-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"><RefreshCw className="w-4 h-4" /></button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
         {loading ? (
@@ -59,6 +54,6 @@ export default function AuditLogs() {
           </div>
         )}
       </main>
-    </div>
+    </AdminLayout>
   );
 }

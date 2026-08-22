@@ -1,43 +1,34 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, clearAuth, getAuthUser } from '@/lib/api';
-import { useTheme } from '@/components/ThemeProvider';
-import QuestionRenderer from '@/components/QuestionRenderer';
-import { 
-  Database, FileText, LayoutGrid, Users, PlusCircle, 
-  Trash2, Edit, Search, LogOut, Sun, Moon, CheckCircle2, 
-  AlertCircle, History, Filter, Building2, GraduationCap, 
-  Layers, UserCog, ChevronDown, ChevronUp, RefreshCw,
-  HelpCircle, IndianRupee, ShoppingCart, Ticket,
-  Megaphone, Activity, ClipboardList, ScrollText, Newspaper, Star, Bug, BarChart3
+import { api, getAuthUser } from '@/lib/api';
+import AdminLayout from '@/components/AdminLayout';
+import {
+  Database, Users, LayoutGrid, AlertCircle, IndianRupee,
+  Building2, GraduationCap, Layers, FileText, UserCog,
+  ShoppingCart, Ticket, Star, Megaphone, Activity,
+  ClipboardList, ScrollText, Newspaper, Bug, BarChart3,
+  RefreshCw, HelpCircle, CreditCard, Shield,
+  TrendingUp, Users as UsersIcon, ShoppingCart as OrdersIcon, DollarSign
 } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
-
   const [user, setUser] = useState<any>(null);
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [stagedCount, setStagedCount] = useState(0);
-  const [testsCount, setTestsCount] = useState(0);
-
-  const [search, setSearch] = useState('');
-  const [subject, setSubject] = useState('');
-  const [difficulty, setDifficulty] = useState('');
   const [loading, setLoading] = useState(true);
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [repoOpen, setRepoOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
   const [stats, setStats] = useState({
     totalQuestions: 0,
     activeCandidates: 0,
+    stagedCount: 0,
+    testsCount: 0,
+    totalRevenue: 0,
   });
   const [revenueData, setRevenueData] = useState<any>(null);
+  const [chartLoading, setChartLoading] = useState(true);
 
   useEffect(() => {
     const activeUser = getAuthUser();
@@ -47,356 +38,233 @@ export default function AdminDashboard() {
       return;
     }
     setUser(activeUser);
-    loadDashboardData();
+    loadStats();
   }, [router]);
 
-  const loadDashboardData = async () => {
+  const loadStats = async () => {
     setLoading(true);
+    setChartLoading(true);
     try {
-      const [allQRes, qRes, stagedRes, testsRes, usersRes, subjRes, revRes] = await Promise.all([
-        api.get('/questions?limit=1'),
-        api.get(`/questions?subject=${subject}&difficulty=${difficulty}&search=${search}`),
+      const [allQRes, stagedRes, testsRes, usersRes, revRes, analyticsRes] = await Promise.all([
+        api.get('/questions?limit=1').catch(() => ({ data: [], pagination: { total: 0 } })),
         api.get('/questions/staged/all').catch(() => ({ data: [] })),
         api.get('/tests').catch(() => ({ data: [] })),
         api.get('/admin/users/stats').catch(() => ({ data: null })),
-        api.get('/questions/subjects'),
         api.get('/analytics/revenue').catch(() => ({ data: null })),
+        api.get('/analytics/live').catch(() => ({ data: null })),
       ]);
 
-      setQuestions(Array.isArray(qRes.data) ? qRes.data : []);
-      setStagedCount(Array.isArray(stagedRes.data) ? stagedRes.data.length : 0);
-      setTestsCount(Array.isArray(testsRes.data) ? testsRes.data.length : 0);
-      setSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
-      setRevenueData(revRes?.data || null);
-
-      const candidates = usersRes.data?.candidates ?? 0;
-
       setStats({
-        totalQuestions: allQRes.pagination?.total || (Array.isArray(allQRes.data) ? allQRes.data.length : 0) || 0,
-        activeCandidates: candidates,
+        totalQuestions: allQRes.pagination?.total || 0,
+        activeCandidates: usersRes.data?.candidates ?? 0,
+        stagedCount: Array.isArray(stagedRes.data) ? stagedRes.data.length : 0,
+        testsCount: Array.isArray(testsRes.data) ? testsRes.data.length : 0,
+        totalRevenue: revRes?.data?.totalRevenue || 0,
       });
-
-      setLoading(false);
+      setRevenueData(revRes?.data || null);
     } catch (err) {
       console.error('Failed to load admin stats', err);
+    } finally {
       setLoading(false);
+      setChartLoading(false);
     }
-  };
-
-  const handleSearchTrigger = (e: React.FormEvent) => {
-    e.preventDefault();
-    loadDashboardData();
-  };
-
-  const handleDeleteQuestion = async (qId: string) => {
-    if (!confirm('Retire this question from the active bank?')) return;
-    try {
-      await api.delete(`/questions/${qId}`);
-      setQuestions(prev => prev.filter(q => q._id !== qId));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length || !confirm(`Retire ${ids.length} question(s) from the active bank?`)) return;
-    try {
-      await api.post('/questions/bulk-delete', { ids, hardDelete: true });
-      setQuestions(prev => prev.filter(q => !selectedIds.has(q._id)));
-      setSelectedIds(new Set());
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const allVisibleSelected = questions.length > 0 && questions.every(q => selectedIds.has(q._id));
-  const toggleSelectAll = () => {
-    if (allVisibleSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(questions.map(q => q._id)));
-    }
-  };
-
-  const handleLogout = () => {
-    clearAuth();
-    router.push('/');
   };
 
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary" />
       </div>
     );
   }
 
+  const statCards = [
+    { label: 'Total Questions', value: stats.totalQuestions, icon: Database, color: 'text-primary', bg: 'bg-primary/10', href: '/admin/parser' },
+    { label: 'Pending Review', value: stats.stagedCount, icon: AlertCircle, color: 'text-indigo-500', bg: 'bg-indigo-500/10', href: '/admin/parser' },
+    { label: 'Published Tests', value: stats.testsCount, icon: LayoutGrid, color: 'text-emerald-500', bg: 'bg-emerald-500/10', href: '/admin/test-series' },
+    { label: 'Active Candidates', value: stats.activeCandidates, icon: Users, color: 'text-amber-500', bg: 'bg-amber-500/10', href: '/admin/users' },
+    { label: 'Total Revenue', value: `₹${stats.totalRevenue.toLocaleString()}`, icon: IndianRupee, color: 'text-emerald-500', bg: 'bg-emerald-500/10', href: '/admin/revenue' },
+  ];
+
+  const quickActions = [
+    { label: 'Agencies', href: '/admin/agencies', icon: Building2, color: 'text-cyan-500 bg-cyan-500/10' },
+    { label: 'Exams', href: '/admin/exams', icon: GraduationCap, color: 'text-violet-500 bg-violet-500/10' },
+    { label: 'Test Series', href: '/admin/test-series', icon: Layers, color: 'text-orange-500 bg-orange-500/10' },
+    { label: 'Questions', href: '/admin/parser', icon: FileText, color: 'text-emerald-500 bg-emerald-500/10' },
+    { label: 'Users', href: '/admin/users', icon: UserCog, color: 'text-rose-500 bg-rose-500/10' },
+    { label: 'Orders', href: '/admin/orders', icon: ShoppingCart, color: 'text-cyan-500 bg-cyan-500/10' },
+  ];
+
+  const revenueTrend = revenueData?.trend || [];
+  const topSeries = revenueData?.topSeries || [];
+  const funnel = revenueData?.funnel || {};
+  const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans transition-colors duration-300">
-      <header className="sticky top-0 z-50 glass w-full border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link href="/" className="shrink-0" aria-label="ExamOS home">
-            <img src="/logo.png" alt="ExamOS" className="w-10 h-10 rounded-xl shadow-md shadow-primary/20 object-cover" />
-          </Link>
-          <span className="font-bold text-xl tracking-tight font-outfit">ExamOS Management</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary transition-colors" title="Toggle Theme">
-            {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-600" />}
-          </button>
-          <div className="text-right hidden sm:block">
-            <div className="text-sm font-semibold">{user.name}</div>
-            <div className="text-xs text-primary font-bold">{user.role} Panel</div>
-          </div>
-          <button onClick={handleLogout} className="p-2.5 rounded-xl border border-border bg-card text-rose-500 hover:bg-rose-500/10 transition-colors" title="Logout">
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8 flex flex-col gap-8">
-        <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border pb-6">
-          <div>
-            <h1 className="text-2xl font-black font-outfit">Admin Dashboard</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Manage agencies, exams, test series, questions, and users.</p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Link href="/admin/agencies" className="px-4 py-2.5 rounded-xl bg-cyan-600 text-white text-xs font-bold hover:bg-cyan-700 transition-all flex items-center gap-1.5 shadow-md shadow-cyan-600/15">
-              <Building2 className="w-4 h-4" /> Agencies
-            </Link>
-            <Link href="/admin/exams" className="px-4 py-2.5 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 transition-all flex items-center gap-1.5 shadow-md shadow-violet-600/15">
-              <GraduationCap className="w-4 h-4" /> Exams
-            </Link>
-            <Link href="/admin/test-series" className="px-4 py-2.5 rounded-xl bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 transition-all flex items-center gap-1.5 shadow-md shadow-orange-600/15">
-              <Layers className="w-4 h-4" /> Test Series
-            </Link>
-            <Link href="/admin/parser" className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/15">
-              <FileText className="w-4 h-4" /> Question Manager
-            </Link>
-            <Link href="/admin/users" className="px-4 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-all flex items-center gap-1.5 shadow-md shadow-rose-600/15">
-              <UserCog className="w-4 h-4" /> Users
-            </Link>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="p-5 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <Database className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] text-muted-foreground font-medium block">Question Bank</span>
-              <span className="text-xl font-bold font-outfit">{stats.totalQuestions}</span>
-            </div>
-          </div>
-          <Link href="/admin/parser" className="p-5 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-4 hover:border-indigo-500/30 transition-all group">
-            <div className="w-11 h-11 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] text-muted-foreground font-medium block">Pending Review</span>
-              <span className="text-xl font-bold font-outfit text-indigo-500">{stagedCount}</span>
-            </div>
-          </Link>
-          <div className="p-5 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-              <LayoutGrid className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] text-muted-foreground font-medium block">Published Tests</span>
-              <span className="text-xl font-bold font-outfit text-emerald-500">{testsCount}</span>
-            </div>
-          </div>
-          <div className="p-5 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] text-muted-foreground font-medium block">Active Candidates</span>
-              <span className="text-xl font-bold font-outfit text-amber-500">{stats.activeCandidates}</span>
-            </div>
-          </div>
-          <Link href="/admin/revenue" className="p-5 rounded-2xl border border-emerald-500/20 bg-card shadow-sm flex items-center gap-4 hover:border-emerald-500/40 transition-all group">
-            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-              <IndianRupee className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] text-muted-foreground font-medium block">Total Revenue</span>
-              <span className="text-xl font-bold font-outfit text-emerald-500">₹{(revenueData?.totalRevenue || 0).toLocaleString()}</span>
-            </div>
-          </Link>
-        </div>
-
+    <AdminLayout user={user}>
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-base font-bold font-outfit mb-4 flex items-center gap-2"><IndianRupee className="w-4 h-4 text-emerald-500" /> Business Modules</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { href: '/admin/revenue', icon: IndianRupee, label: 'Revenue Dashboard', color: 'text-emerald-500 bg-emerald-500/10' },
-              { href: '/admin/engagement', icon: Activity, label: 'Engagement', color: 'text-violet-500 bg-violet-500/10' },
-              { href: '/admin/orders', icon: ShoppingCart, label: 'Orders', color: 'text-cyan-500 bg-cyan-500/10' },
-              { href: '/admin/coupons', icon: Ticket, label: 'Coupons', color: 'text-pink-500 bg-pink-500/10' },
-              { href: '/admin/plans', icon: Star, label: 'Plans / Subscriptions', color: 'text-amber-500 bg-amber-500/10' },
-              { href: '/admin/announcements', icon: Megaphone, label: 'Announcements', color: 'text-sky-500 bg-sky-500/10' },
-              { href: '/admin/attempts', icon: ClipboardList, label: 'Student Attempts', color: 'text-violet-500 bg-violet-500/10' },
-              { href: '/admin/audit-logs', icon: ScrollText, label: 'Audit Logs', color: 'text-indigo-500 bg-indigo-500/10' },
-              { href: '/admin/materials', icon: FileText, label: 'Study Materials', color: 'text-emerald-500 bg-emerald-500/10' },
-              { href: '/admin/doubts', icon: HelpCircle, label: 'Doubts Forum', color: 'text-amber-500 bg-amber-500/10' },
-              { href: '/admin/blogs', icon: Newspaper, label: 'Blogs', color: 'text-sky-500 bg-sky-500/10' },
-              { href: '/admin/error-logs', icon: Bug, label: 'Error Logs', color: 'text-rose-500 bg-rose-500/10' },
-              { href: '/admin/analytics', icon: BarChart3, label: 'Analytics / Traffic', color: 'text-cyan-500 bg-cyan-500/10' },
-            ].map(m => (
-              <Link key={m.href} href={m.href} className="p-4 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-3 hover:border-primary/30 transition-all group">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${m.color} group-hover:scale-105 transition-transform`}><m.icon className="w-4 h-4" /></div>
-                <span className="text-xs font-semibold leading-tight">{m.label}</span>
-              </Link>
-            ))}
-          </div>
+          <h1 className="text-2xl font-black font-outfit">Admin Dashboard</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Manage your platform at a glance</p>
         </div>
+        <button onClick={loadStats} disabled={loading}
+          className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+        </button>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 flex flex-col gap-6">
-            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-border flex items-center justify-between gap-4 flex-wrap cursor-pointer select-none"
-                onClick={() => setRepoOpen(!repoOpen)}>
-                <h2 className="text-base font-bold font-outfit flex items-center gap-2">
-                  <Database className="w-4 h-4 text-primary" /> Question Repository
-                  <span className="text-[11px] font-normal text-muted-foreground">({questions.length} shown)</span>
-                  {repoOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                </h2>
-                {repoOpen && (
-                <form onSubmit={handleSearchTrigger} onClick={(e) => e.stopPropagation()} className="flex items-center gap-3 flex-1 max-w-lg">
-                  <div className="relative flex-1">
-                    <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input type="text" placeholder="Search by body or tags..." value={search} onChange={(e) => setSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <select value={subject} onChange={(e) => setSubject(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-border bg-background text-xs font-semibold focus:outline-none cursor-pointer">
-                    <option value="">All Subj</option>
-                    {subjects.map((s) => (<option key={s} value={s}>{s}</option>))}
-                  </select>
-                  <button type="submit" className="px-3 py-2 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xs font-bold hover:opacity-90">
-                    <Search className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-                )}
-              </div>
-
-              {repoOpen && (() => {
-                if (questions.length === 0) {
-                  return <div className="p-12 text-center text-sm text-muted-foreground">No matching items in master bank.</div>;
-                }
-                return (
-                  <>
-                    {selectedIds.size > 0 && (
-                      <div className="sticky top-0 z-10 px-5 py-3 bg-rose-500/10 border-b border-rose-500/20 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-rose-500">{selectedIds.size} selected</span>
-                        <div className="flex gap-2">
-                          <button onClick={() => setSelectedIds(new Set())} className="px-3 py-1.5 rounded-lg bg-secondary text-xs font-semibold hover:bg-secondary/80 transition-colors">Clear</button>
-                          <button onClick={handleBulkDelete} className="px-3 py-1.5 rounded-lg bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-colors flex items-center gap-1.5">
-                            <Trash2 className="w-3.5 h-3.5" /> Delete Selected
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    <div className="divide-y divide-border">
-                      <div className="px-5 py-2.5 flex items-center gap-4 bg-muted/30">
-                        <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll}
-                          className="w-4 h-4 rounded border-border accent-rose-500 cursor-pointer shrink-0" />
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Select All</span>
-                      </div>
-                      {questions.map((q, idx) => (
-                      <div key={q._id}>
-                        <div className="px-5 py-3 flex items-center gap-4 hover:bg-muted/20 transition-colors cursor-pointer"
-                          onClick={() => setExpandedId(expandedId === q._id ? null : q._id)}>
-                          <input type="checkbox" checked={selectedIds.has(q._id)} onChange={() => toggleSelect(q._id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-4 h-4 rounded border-border accent-rose-500 cursor-pointer shrink-0" />
-                          <span className="shrink-0 w-7 h-7 rounded-lg bg-secondary text-secondary-foreground flex items-center justify-center text-[11px] font-bold">{idx + 1}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold truncate">{q.body?.split('\n')[0] || '(no body)'}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              {q.subject && <span className="text-[10px] px-2 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">{q.subject}</span>}
-                              {q.topic && <span className="text-[10px] text-muted-foreground">{q.topic}</span>}
-                              {q.type && <span className="text-[10px] text-muted-foreground">| {q.type}</span>}
-                            </div>
-                          </div>
-                          <div className="hidden sm:flex items-center gap-3 text-[10px] text-muted-foreground shrink-0">
-                            <span className={`px-2 py-0.5 rounded font-semibold ${
-                              q.difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-500' :
-                              q.difficulty === 'Hard' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'
-                            }`}>{q.difficulty || 'N/A'}</span>
-                            <span>+{q.marks ?? 1}</span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q._id); }}
-                              className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors" title="Delete">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                            {expandedId === q._id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                          </div>
-                        </div>
-                        {expandedId === q._id && (
-                          <div className="px-5 pb-5 pt-2 border-t border-border/40 bg-muted/10">
-                            <QuestionRenderer question={q} showOptions showExplanation showCorrectAnswer showMeta showHeader={false} />
-                          </div>
-                        )}
-                      </div>
-                    )                    )}
-                  </div>
-                  </>
-                );
-              })()}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        {statCards.map((s) => (
+          <Link key={s.label} href={s.href}
+            className="p-4 sm:p-5 rounded-2xl border border-border bg-card shadow-sm flex items-center gap-3 hover:border-primary/30 hover:-translate-y-0.5 transition-all group">
+            <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${s.bg} ${s.color} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
+              <s.icon className="w-5 h-5" />
             </div>
-          </div>
+            <div className="min-w-0">
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground font-medium block truncate">{s.label}</span>
+              <span className="text-lg sm:text-xl font-bold font-outfit">{s.value}</span>
+            </div>
+          </Link>
+        ))}
+      </div>
 
-          <div className="flex flex-col gap-6">
-            <div className="p-5 rounded-2xl border border-border bg-card shadow-sm flex flex-col gap-4">
-              <h3 className="text-sm font-bold font-outfit flex items-center gap-2">
-                <History className="w-4 h-4 text-indigo-500" /> Activity Log
+      <div>
+        <h2 className="text-sm font-bold font-outfit mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {quickActions.map((a) => (
+            <Link key={a.href} href={a.href}
+              className="p-4 rounded-2xl border border-border bg-card shadow-sm flex flex-col items-center gap-2 hover:border-primary/30 hover:-translate-y-0.5 transition-all group text-center">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${a.color} group-hover:scale-105 transition-transform`}>
+                <a.icon className="w-5 h-5" />
+              </div>
+              <span className="text-[11px] font-semibold">{a.label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Business Graphs Section */}
+      <div className="flex flex-col gap-6">
+        <h2 className="text-sm font-bold font-outfit mb-1">Business Insights</h2>
+
+        {/* Top row: Revenue trend + User funnel */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Revenue Trend Chart */}
+          <div className="lg:col-span-2 p-5 rounded-3xl border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold font-outfit flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" /> Revenue Trend (6 months)
               </h3>
-              <div className="flex flex-col gap-2 text-xs text-muted-foreground">
-                <div className="p-3 rounded-xl bg-indigo-500/[0.04] border border-indigo-500/10 flex items-center gap-3">
-                  <HelpCircle className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <p>Audit telemetry appears here once the backend activity logger is configured.</p>
-                </div>
+              <span className="text-[10px] text-muted-foreground">Monthly revenue & orders</span>
+            </div>
+            {chartLoading ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">Loading charts...</div>
+            ) : revenueTrend.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">No revenue data yet.</div>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={revenueTrend} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
+                    <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line type="monotone" dataKey="revenue" name="Revenue (₹)" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="orders" name="Orders" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* User Funnel + Stats */}
+          <div className="p-5 rounded-3xl border border-border bg-card shadow-sm flex flex-col gap-4">
+            <h3 className="text-base font-bold font-outfit flex items-center gap-2">
+              <UsersIcon className="w-4 h-4 text-primary" /> User Funnel
+            </h3>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Total Users</span>
+                <span className="text-sm font-bold font-outfit">{funnel.totalUsers || 0}</span>
+              </div>
+              <div className="w-full bg-secondary rounded-full h-2">
+                <div className="bg-primary h-2 rounded-full" style={{ width: `${funnel.totalUsers ? Math.min(100, (funnel.usersWithOrder / funnel.totalUsers) * 100) : 0}%` }} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Users with Orders</span>
+                <span className="text-sm font-bold font-outfit text-amber-600">{funnel.usersWithOrder || 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Paid Orders</span>
+                <span className="text-sm font-bold font-outfit text-emerald-600">{funnel.paidUsers || 0}</span>
               </div>
             </div>
-
-            <div className="p-5 rounded-2xl border border-border bg-gradient-to-br from-card to-primary/5 shadow-sm flex flex-col gap-4">
-              <h3 className="text-sm font-bold font-outfit">Quick Links</h3>
-              <div className="flex flex-col gap-2">
-                <Link href="/admin/test-series" className="px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-semibold flex items-center justify-between transition-colors">
-                  Test Series <span className="text-primary">&rarr;</span>
-                </Link>
-                <Link href="/admin/test-builder" className="px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-semibold flex items-center justify-between transition-colors">
-                  Test Builder <span className="text-primary">&rarr;</span>
-                </Link>
-                <Link href="/admin/parser" className="px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-semibold flex items-center justify-between transition-colors">
-                  Question Manager <span className="text-primary">&rarr;</span>
-                </Link>
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="p-3 rounded-xl bg-secondary/50 text-center">
+                <div className="text-[10px] text-muted-foreground mb-1">Avg Order</div>
+                <div className="text-sm font-bold font-outfit">₹{revenueData?.avgOrderValue || 0}</div>
               </div>
-              <button onClick={loadDashboardData} disabled={loading}
-                className="w-full px-4 py-2.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
-              </button>
+              <div className="p-3 rounded-xl bg-secondary/50 text-center">
+                <div className="text-[10px] text-muted-foreground mb-1">Last 30d</div>
+                <div className="text-sm font-bold font-outfit">₹{revenueData?.revenueLast30Days || 0}</div>
+              </div>
             </div>
           </div>
         </div>
-      </main>
 
-      <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground mt-auto">
-        Platform Version: {process.env.NEXT_PUBLIC_APP_VERSION || 'dev'} | Admin Console
-      </footer>
-    </div>
+        {/* Bottom row: Top series + Orders chart */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Top Test Series by Revenue */}
+          <div className="p-5 rounded-3xl border border-border bg-card shadow-sm">
+            <h3 className="text-base font-bold font-outfit flex items-center gap-2 mb-4">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> Top Series by Revenue
+            </h3>
+            {topSeries.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">No revenue data yet.</div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {topSeries.map((s: any, idx: number) => (
+                  <div key={s.id} className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-xs font-bold text-muted-foreground">#{idx + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold truncate">{s.name}</div>
+                      <div className="w-full bg-secondary rounded-full h-1.5 mt-1">
+                        <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${topSeries[0]?.revenue ? (s.revenue / topSeries[0].revenue) * 100 : 0}%` }} />
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold font-outfit text-emerald-600 shrink-0">₹{s.revenue.toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Monthly Orders Bar Chart */}
+          <div className="p-5 rounded-3xl border border-border bg-card shadow-sm">
+            <h3 className="text-base font-bold font-outfit flex items-center gap-2 mb-4">
+              <OrdersIcon className="w-4 h-4 text-primary" /> Monthly Orders
+            </h3>
+            {chartLoading ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">Loading...</div>
+            ) : revenueTrend.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">No data yet.</div>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={revenueTrend} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
+                    <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }} />
+                    <Bar dataKey="orders" name="Orders" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </AdminLayout>
   );
 }

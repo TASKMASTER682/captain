@@ -1,22 +1,25 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { Ticket, Plus, Edit3, Trash2, ArrowLeft, Save, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function CouponsManagement() {
   const router = useRouter();
   const [coupons, setCoupons] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ code: '', discountType: 'percent', value: 10, maxUses: 0, minAmount: 0, expiresAt: '', active: true });
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
     load();
   }, [router]);
 
@@ -65,17 +68,7 @@ export default function CouponsManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <Ticket className="w-5 h-5 text-pink-500" />
-          <h1 className="font-bold text-lg font-outfit">Coupons</h1>
-        </div>
-        <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-pink-600 text-white text-xs font-bold hover:bg-pink-700 flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> New Coupon
-        </button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
         {loading ? (
@@ -159,6 +152,6 @@ export default function CouponsManagement() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

@@ -1,19 +1,22 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { ArrowLeft, IndianRupee, TrendingUp, ShoppingCart, Receipt, Percent } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function RevenueDashboard() {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
     load();
   }, [router]);
 
@@ -29,15 +32,7 @@ export default function RevenueDashboard() {
   const maxTrend = Math.max(...(data?.trend || []).map((t: any) => t.revenue), 1);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <IndianRupee className="w-5 h-5 text-emerald-500" />
-          <h1 className="font-bold text-lg font-outfit">Revenue Dashboard</h1>
-        </div>
-        <button onClick={load} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Refresh</button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">
         {loading || !data ? (
@@ -114,6 +109,6 @@ export default function RevenueDashboard() {
           </div>
         )}
       </main>
-    </div>
+    </AdminLayout>
   );
 }

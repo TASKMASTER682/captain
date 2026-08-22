@@ -1,23 +1,26 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { GraduationCap, Plus, Edit3, Trash2, ArrowLeft, Save, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function ExamManagement() {
   const router = useRouter();
   const [exams, setExams] = useState<any[]>([]);
   const [agencies, setAgencies] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ name: '', code: '', description: '', agencyId: '' });
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
     loadData();
   }, [router]);
 
@@ -62,17 +65,7 @@ export default function ExamManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <GraduationCap className="w-5 h-5 text-violet-500" />
-          <h1 className="font-bold text-lg font-outfit">Exam Management</h1>
-        </div>
-        <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> New Exam
-        </button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
         {loading ? (
@@ -137,6 +130,6 @@ export default function ExamManagement() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

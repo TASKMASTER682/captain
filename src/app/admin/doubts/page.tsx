@@ -1,19 +1,22 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { ArrowLeft, HelpCircle, Bot, Trash2, Search, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function AdminDoubts() {
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    const user = getAuthUser();
+    const activeUser = getAuthUser();
     const staffRoles = ['Super Admin', 'Content Manager', 'Support'];
     if (!user || !staffRoles.includes(user.role)) { router.push('/login'); return; }
     load();
@@ -39,14 +42,7 @@ export default function AdminDoubts() {
   const statusColor: any = { open: 'bg-amber-500/10 text-amber-500', answered: 'bg-emerald-500/10 text-emerald-500', resolved: 'bg-sky-500/10 text-sky-500' };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <HelpCircle className="w-5 h-5 text-amber-500" />
-          <h1 className="font-bold text-lg font-outfit">Doubts Forum</h1>
-        </div>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8 flex flex-col gap-5">
         <div className="relative">
@@ -84,6 +80,6 @@ export default function AdminDoubts() {
           </div>
         )}
       </main>
-    </div>
+    </AdminLayout>
   );
 }

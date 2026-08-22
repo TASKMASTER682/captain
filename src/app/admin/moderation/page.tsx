@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
@@ -9,6 +10,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import QuestionRenderer from '@/components/QuestionRenderer';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function ContentModeration() {
   const router = useRouter();
@@ -106,26 +108,10 @@ export default function ContentModeration() {
   const duplicateMap = new Map<string, any>();
   dupData.forEach((d) => { if (d._id) duplicateMap.set(d._id, d); });
 
-  if (!user) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary"></div></div>;
+  if (!user) return <AdminLayout user={user}><div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary"></div></div></AdminLayout>;
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <ShieldAlert className="w-5 h-5 text-amber-500" />
-          <h1 className="font-bold text-lg font-outfit">Content Moderation</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 font-semibold flex items-center gap-1.5">
-            <FileWarning className="w-3.5 h-3.5" /> {staged.length} Pending
-          </span>
-          <span className="text-xs px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-500 font-semibold flex items-center gap-1.5">
-            <Copy className="w-3.5 h-3.5" /> {duplicateMap.size} Duplicates
-          </span>
-          <button onClick={loadAll} className="p-2.5 rounded-xl bg-amber-600 text-white hover:bg-amber-700"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
-        </div>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
         {error && (
@@ -277,7 +263,7 @@ export default function ContentModeration() {
           </>
         )}
       </main>
-    </div>
+    </AdminLayout>
   );
 }
 

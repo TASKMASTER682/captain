@@ -1,16 +1,19 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { Layers, Plus, Edit3, Trash2, ArrowLeft, Save, X, Building2, Image as ImageIcon, Loader2, Power } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function TestSeriesManagement() {
   const router = useRouter();
   const [series, setSeries] = useState<any[]>([]);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [allExams, setAllExams] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -19,7 +22,7 @@ export default function TestSeriesManagement() {
   const [bannerFor, setBannerFor] = useState<any>(null);
 
   useEffect(() => {
-    const user = getAuthUser();
+    const activeUser = getAuthUser();
     const staffRoles = ['Super Admin', 'Content Manager'];
     if (!user || !staffRoles.includes(user.role)) { router.push('/login'); return; }
     loadData();
@@ -129,17 +132,7 @@ export default function TestSeriesManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <Layers className="w-5 h-5 text-orange-500" />
-          <h1 className="font-bold text-lg font-outfit">Test Series Management</h1>
-        </div>
-        <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> New Series
-        </button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
         {loading ? (
@@ -298,6 +291,6 @@ export default function TestSeriesManagement() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

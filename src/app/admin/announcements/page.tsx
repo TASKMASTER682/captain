@@ -1,14 +1,17 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { Megaphone, Plus, Edit3, Trash2, ArrowLeft, Save, X, Power } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function AnnouncementsManagement() {
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -17,7 +20,7 @@ export default function AnnouncementsManagement() {
   const typeColorMap: Record<string, string> = { info: '#0ea5e9', success: '#10b981', warning: '#f59e0b', danger: '#f43f5e' };
 
   useEffect(() => {
-    const user = getAuthUser();
+    const activeUser = getAuthUser();
     const staffRoles = ['Super Admin', 'Content Manager', 'Support'];
     if (!user || !staffRoles.includes(user.role)) { router.push('/login'); return; }
     load();
@@ -73,17 +76,7 @@ export default function AnnouncementsManagement() {
   const typeColors: any = { info: 'bg-sky-500/10 text-sky-500', success: 'bg-emerald-500/10 text-emerald-500', warning: 'bg-amber-500/10 text-amber-500', danger: 'bg-rose-500/10 text-rose-500' };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <Megaphone className="w-5 h-5 text-sky-500" />
-          <h1 className="font-bold text-lg font-outfit">Announcements</h1>
-        </div>
-        <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-sky-600 text-white text-xs font-bold hover:bg-sky-700 flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> New Announcement
-        </button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
         {loading ? (
@@ -196,6 +189,6 @@ export default function AnnouncementsManagement() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

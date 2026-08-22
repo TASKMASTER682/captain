@@ -1,14 +1,17 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
 import { ArrowLeft, Plus, Edit3, Trash2, Save, X, FileText, File, Video, Power, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function MaterialsManagement() {
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -21,7 +24,7 @@ export default function MaterialsManagement() {
   const [agencies, setAgencies] = useState<any[]>([]);
 
   useEffect(() => {
-    const user = getAuthUser();
+    const activeUser = getAuthUser();
     const staffRoles = ['Super Admin', 'Content Manager', 'Support'];
     if (!user || !staffRoles.includes(user.role)) { router.push('/login'); return; }
     load();
@@ -92,17 +95,7 @@ export default function MaterialsManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <FileText className="w-5 h-5 text-primary" />
-          <h1 className="font-bold text-lg font-outfit">Study Materials</h1>
-        </div>
-        <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> New Material
-        </button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-5">
         <div className="relative">
@@ -232,6 +225,6 @@ export default function MaterialsManagement() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

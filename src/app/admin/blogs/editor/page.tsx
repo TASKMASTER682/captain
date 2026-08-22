@@ -6,6 +6,7 @@ import { ArrowLeft, Save, Send, X, Search, FileText, File, Video, Plus, Trash2, 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SEO_SCHEMAS, getSeoSchemaDef, type SeoSchemaType } from '@/app/blogs/seo-schemas';
+import AdminLayout from '@/components/AdminLayout';
 
 interface MaterialItem {
   _id: string;
@@ -34,6 +35,7 @@ function BlogEditor() {
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(false);
   const [loading, setLoading] = useState(!!editId);
+  const [user, setUser] = useState<any>(null);
 
   // Material attach picker
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -41,9 +43,10 @@ function BlogEditor() {
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
 
   useEffect(() => {
-    const user = getAuthUser();
+    const activeUser = getAuthUser();
     const staffRoles = ['Super Admin', 'Content Manager', 'Support'];
-    if (!user || !staffRoles.includes(user.role)) { router.push('/login'); return; }
+    if (!activeUser || !staffRoles.includes(activeUser.role)) { router.push('/login'); return; }
+    setUser(activeUser);
 
     if (editId) {
       api.get(`/blogs/${editId}`).then(r => {
@@ -159,32 +162,11 @@ function BlogEditor() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-background text-foreground flex items-center justify-center font-sans">Loading...</div>;
+    return <AdminLayout user={user}><div className="min-h-screen bg-background flex items-center justify-center">Loading...</div></AdminLayout>;
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/blogs" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <Newspaper className="w-5 h-5 text-primary" />
-          <h1 className="font-bold text-lg font-playfair">{editId ? 'Edit Blog' : 'New Blog'}</h1>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setPreview(!preview)}
-            className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted flex items-center gap-1.5">
-            {preview ? <Code2 className="w-4 h-4" /> : <Eye className="w-4 h-4" />} {preview ? 'Edit' : 'Preview'}
-          </button>
-          <button onClick={() => save('draft')} disabled={saving}
-            className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted flex items-center gap-1.5">
-            <Save className="w-4 h-4" /> Save Draft
-          </button>
-          <button onClick={() => save('published')} disabled={saving}
-            className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 flex items-center gap-1.5">
-            <Send className="w-4 h-4" /> {form.status === 'published' ? 'Update' : 'Publish'}
-          </button>
-        </div>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-6">
         <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4">
@@ -415,7 +397,7 @@ function BlogEditor() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }
 

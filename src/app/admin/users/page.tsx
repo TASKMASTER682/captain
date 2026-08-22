@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api, getAuthUser } from '@/lib/api';
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 const ALL_ROLES = ['User', 'Content Manager', 'Support', 'Super Admin'];
 const STAFF_ROLES = ['Super Admin', 'Content Manager', 'Support'];
@@ -32,7 +34,7 @@ const roleAvatar = (role: string) => {
 
 export default function UserManagement() {
   const router = useRouter();
-  const [me, setMe] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,7 @@ export default function UserManagement() {
   useEffect(() => {
     const user = getAuthUser();
     if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
-    setMe(user);
+    setUser(user);
   }, [router]);
 
   // Debounce search
@@ -81,7 +83,7 @@ export default function UserManagement() {
     setLoading(false);
   }, [debounced, roleFilter, page]);
 
-  useEffect(() => { if (me) loadUsers(); }, [me, loadUsers]);
+  useEffect(() => { if (user) loadUsers(); }, [user, loadUsers]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -90,7 +92,7 @@ export default function UserManagement() {
     } catch (_e) {}
   }, []);
 
-  useEffect(() => { if (me) loadStats(); }, [me, loadStats]);
+  useEffect(() => { if (user) loadStats(); }, [user, loadStats]);
 
   // Close role dropdown on outside click
   useEffect(() => {
@@ -101,7 +103,7 @@ export default function UserManagement() {
     }
   }, [roleMenuFor]);
 
-  const isSelf = (u: any) => me && u._id === me._id;
+  const isSelf = (u: any) => user && u._id === user._id;
   const isOtherSuper = (u: any) => u.role === 'Super Admin' && !isSelf(u);
 
   const changeRole = async (u: any, newRole: string) => {
@@ -165,20 +167,7 @@ export default function UserManagement() {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80 shrink-0"><ArrowLeft className="w-4 h-4" /></Link>
-          <UserCog className="w-5 h-5 text-rose-500 shrink-0" />
-          <div className="min-w-0">
-            <h1 className="font-bold text-lg font-outfit leading-tight">User Management</h1>
-            <p className="text-[10px] text-muted-foreground">Roles &amp; access control</p>
-          </div>
-        </div>
-        <Link href="/admin/audit-logs" className="px-3 py-2 rounded-xl bg-secondary text-xs font-semibold hover:bg-secondary/80 shrink-0 flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Audit Logs</span>
-        </Link>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
         {/* Stats */}
@@ -372,6 +361,6 @@ export default function UserManagement() {
           {toast.msg}
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

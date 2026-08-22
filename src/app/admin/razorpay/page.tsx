@@ -1,19 +1,17 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, CreditCard } from 'lucide-react';
 import Link from 'next/link';
+import AdminLayout from '@/components/AdminLayout';
+import { getAuthUser } from '@/lib/api';
 
 export default function RazorpaySettings() {
+  const [user, setUser] = useState<any>(null);
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center gap-3">
-        <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80">
-          <ArrowLeft className="w-4 h-4" />
-        </Link>
-        <CreditCard className="w-5 h-5 text-rose-500" />
-        <h1 className="font-bold text-lg font-outfit">Razorpay Configuration</h1>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-8">
         <div className="p-6 rounded-2xl border border-border bg-card shadow-sm">
@@ -37,6 +35,6 @@ export default function RazorpaySettings() {
           </div>
         </div>
       </main>
-    </div>
+    </AdminLayout>
   );
 }

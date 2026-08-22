@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, getAuthUser } from '@/lib/api';
@@ -6,11 +7,13 @@ import { ArrowLeft, BarChart3, RefreshCw, Radio, Eye, Users, MonitorSmartphone }
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function AdminAnalytics() {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [live, setLive] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -33,8 +36,8 @@ export default function AdminAnalytics() {
   }, []);
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
     loadVisits();
     loadLive();
     const iv = setInterval(loadLive, 15_000);
@@ -63,18 +66,7 @@ export default function AdminAnalytics() {
   );
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <BarChart3 className="w-5 h-5 text-cyan-500" />
-          <h1 className="font-bold text-lg font-outfit">Analytics</h1>
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">
-            <Radio className="w-3 h-3 animate-pulse" /> {live.length} live
-          </span>
-        </div>
-        <button onClick={() => { loadVisits(); loadLive(); }} className="p-2.5 rounded-xl bg-cyan-600 text-white hover:bg-cyan-700"><RefreshCw className="w-4 h-4" /></button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
         {error ? (
@@ -156,6 +148,6 @@ export default function AdminAnalytics() {
           </div>
         )}
       </main>
-    </div>
+    </AdminLayout>
   );
 }

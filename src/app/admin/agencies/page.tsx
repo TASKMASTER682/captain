@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
@@ -6,9 +7,11 @@ import { Building2, Plus, Edit3, Trash2, ArrowLeft, Save, X } from 'lucide-react
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getAuthUser } from '@/lib/api';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function AgencyManagement() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -16,8 +19,9 @@ export default function AgencyManagement() {
   const [form, setForm] = useState({ name: '', code: '', description: '' });
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
+    setUser(activeUser);
     loadAgencies();
   }, [router]);
 
@@ -63,17 +67,7 @@ export default function AgencyManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <Building2 className="w-5 h-5 text-cyan-500" />
-          <h1 className="font-bold text-lg font-outfit">Agency Management</h1>
-        </div>
-        <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-cyan-600 text-white text-xs font-bold hover:bg-cyan-700 flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> New Agency
-        </button>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
         {loading ? (
@@ -129,6 +123,6 @@ export default function AgencyManagement() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

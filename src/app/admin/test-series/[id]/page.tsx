@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function TestSeriesDetail() {
   const router = useRouter();
@@ -72,10 +73,12 @@ export default function TestSeriesDetail() {
   const [bankLoading, setBankLoading] = useState(false);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(new Set());
   const [activeBankSection, setActiveBankSection] = useState<number | null>(null);
+  const [me, setMe] = useState<any>(null);
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
+    setMe(activeUser);
     loadData();
   }, [router, seriesId]);
 
@@ -367,27 +370,14 @@ export default function TestSeriesDetail() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary"></div></div>;
+    return <AdminLayout user={me}><div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-primary"></div></div></AdminLayout>;
   }
   if (!testSeries) {
-    return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Test Series not found.</div>;
+    return <AdminLayout user={me}><div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Test Series not found.</div></AdminLayout>;
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/test-series" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <Layers className="w-5 h-5 text-orange-500" />
-          <div>
-            <h1 className="font-bold text-lg font-outfit">{testSeries.title}</h1>
-            <p className="text-[10px] text-muted-foreground">{testSeries.examId?.name || 'N/A'} — {tests.length} test(s)</p>
-          </div>
-        </div>
-        <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> New Test
-        </button>
-      </header>
+    <AdminLayout user={me}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
         {tests.length === 0 ? (
@@ -924,6 +914,6 @@ export default function TestSeriesDetail() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

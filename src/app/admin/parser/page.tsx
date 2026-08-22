@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { api, getAuthUser } from '@/lib/api';
@@ -9,9 +10,11 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import QuestionRenderer from '@/components/QuestionRenderer';
+import AdminLayout from '@/components/AdminLayout';
 
 export default function QuestionPasteManager() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
   const [pasteText, setPasteText] = useState('');
   const [parsed, setParsed] = useState<any[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -21,8 +24,9 @@ export default function QuestionPasteManager() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const user = getAuthUser();
-    if (!user || user.role !== 'Super Admin') { router.push('/login'); return; }
+    const activeUser = getAuthUser();
+    if (!activeUser || activeUser.role !== 'Super Admin') { router.push('/login'); return; }
+    setUser(activeUser);
     loadUnusedCount();
   }, [router]);
 
@@ -57,20 +61,7 @@ export default function QuestionPasteManager() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <header className="sticky top-0 z-50 glass border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80"><ArrowLeft className="w-4 h-4" /></Link>
-          <FileText className="w-5 h-5 text-emerald-500" />
-          <h1 className="font-bold text-lg font-outfit">Question Manager</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 font-semibold flex items-center gap-1.5">
-            <Database className="w-3.5 h-3.5" /> {unusedCount} Unused
-          </span>
-          <span className="text-xs font-semibold text-primary px-3 py-1.5 rounded-lg bg-primary/10">Super Admin</span>
-        </div>
-      </header>
+    <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-8">
         {/* Stats */}
@@ -175,6 +166,6 @@ export default function QuestionPasteManager() {
           </div>
         )}
       </main>
-    </div>
+    </AdminLayout>
   );
 }

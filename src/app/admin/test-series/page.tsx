@@ -24,7 +24,8 @@ export default function TestSeriesManagement() {
   useEffect(() => {
     const activeUser = getAuthUser();
     const staffRoles = ['Super Admin', 'Content Manager'];
-    if (!user || !staffRoles.includes(user.role)) { router.push('/login'); return; }
+    if (!activeUser || !staffRoles.includes(activeUser.role)) { router.push('/login'); return; }
+    setUser(activeUser);
     loadData();
   }, [router]);
 

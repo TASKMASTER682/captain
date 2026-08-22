@@ -30,7 +30,7 @@ export default function QuestionPasteManager() {
     try {
       const res = await api.get('/questions?usageStatus=unused&limit=1');
       setUnusedCount(res.pagination?.total || 0);
-    } catch { /* ignore */ }
+    } catch (_e) { /* ignore */ }
   };
 
   const handleParse = async () => {

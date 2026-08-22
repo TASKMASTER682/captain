@@ -37,7 +37,7 @@ export function getStoredExploreAgencyId(): string | null {
   if (typeof window === 'undefined') return null;
   try {
     return localStorage.getItem(EXPLORE_AGENCY_STORAGE_KEY) || null;
-  } catch {
+  } catch (_e) {
     return null;
   }
 }
@@ -46,7 +46,7 @@ function persistExploreAgencyId(id: string | null) {
   try {
     if (id) localStorage.setItem(EXPLORE_AGENCY_STORAGE_KEY, id);
     else localStorage.removeItem(EXPLORE_AGENCY_STORAGE_KEY);
-  } catch {}
+  } catch (_e) {}
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(EXPLORE_AGENCY_CHANGED_EVENT, { detail: id }));
   }

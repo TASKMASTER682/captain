@@ -87,7 +87,7 @@ export default function UserManagement() {
     try {
       const res = await api.get('/admin/users/stats');
       setStats(res.data || null);
-    } catch {}
+    } catch (_e) {}
   }, []);
 
   useEffect(() => { if (me) loadStats(); }, [me, loadStats]);

@@ -17,10 +17,8 @@ import {
   BarChart3,
   Menu,
   X,
-  LogOut
 } from 'lucide-react';
-import { clearAuth } from '@/lib/api';
-import { useRouter } from 'next/navigation';
+
 
 export default function StudentSidebar({
   isOpen,
@@ -30,12 +28,6 @@ export default function StudentSidebar({
   setIsOpen: (val: boolean) => void;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  const handleLogout = () => {
-    clearAuth();
-    router.push('/');
-  };
 
   // Close sidebar on mobile when path changes
   useEffect(() => {
@@ -115,21 +107,7 @@ export default function StudentSidebar({
           })}
         </div>
 
-        {/* Logout */}
-        <div className="p-3 border-t border-border">
-          <button
-            onClick={handleLogout}
-            title={!isOpen ? 'Logout' : undefined}
-            className={`w-full flex items-center gap-3.5 px-3 py-3 rounded-xl text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500 transition-all font-medium group
-              ${!isOpen ? 'lg:justify-center' : ''}
-            `}
-          >
-            <LogOut className="w-5 h-5 shrink-0 transition-transform group-hover:scale-110 group-hover:-translate-x-0.5" />
-            <span className={`text-sm whitespace-nowrap transition-all duration-300 ${!isOpen ? 'lg:opacity-0 lg:w-0 lg:hidden' : 'opacity-100 w-auto'}`}>
-              Logout
-            </span>
-          </button>
-        </div>
+
 
       </div>
     </>

@@ -3,9 +3,11 @@
 import React, { useState } from 'react';
 import StudentSidebar from './StudentSidebar';
 import { AgencyProvider } from '@/components/AgencyContext';
-import { Menu, Sun, Moon, Crown } from 'lucide-react';
+import { Menu, Sun, Moon, Crown, LogOut } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import Link from 'next/link';
+import { clearAuth } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 
 export default function StudentLayout({
   children,
@@ -16,6 +18,9 @@ export default function StudentLayout({
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
+
+  const handleLogout = () => { clearAuth(); router.push('/'); };
 
   // Members see no upgrade prompt — same rule the analytics endpoints enforce.
   const isMember =
@@ -57,6 +62,9 @@ export default function StudentLayout({
               )}
               <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary-foreground hover:text-secondary transition-colors" title="Toggle Theme">
                 {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-600" />}
+              </button>
+              <button onClick={handleLogout} className="p-2.5 rounded-xl border border-border bg-card text-rose-500 hover:bg-rose-500/10 transition-colors" title="Logout">
+                <LogOut className="w-5 h-5" />
               </button>
               <div className="text-right hidden sm:block">
                 <div className="text-sm font-semibold">{user?.name}</div>

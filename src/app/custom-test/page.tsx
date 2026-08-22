@@ -47,7 +47,7 @@ export default function CustomTestPage() {
         setHasAccess(false);
         setLoading(false);
       }
-    } catch {
+    } catch (_e) {
       setHasAccess(false);
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export default function CustomTestPage() {
     try {
       const res = await api.get(`/custom-tests/setup?agencyId=${agencyId}`);
       setExams(res.data.exams || []);
-    } catch {}
+    } catch (_e) {}
   }, []);
 
   // When exam changes → load subjects for that exam
@@ -85,7 +85,7 @@ export default function CustomTestPage() {
     try {
       const res = await api.get(`/custom-tests/setup?examId=${examId}`);
       setSubjects(res.data.subjects || []);
-    } catch {}
+    } catch (_e) {}
   }, []);
 
   useEffect(() => { loadExams(selectedAgency); }, [selectedAgency, loadExams]);

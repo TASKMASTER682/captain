@@ -44,7 +44,7 @@ function TestSeriesPageContent() {
     return stored as 'hard' | 'mix' | 'easy' || 'mix';
   });
   useEffect(() => {
-    try { localStorage.setItem('examos_difficulty', difficulty); } catch {}
+    try { localStorage.setItem('examos_difficulty', difficulty); } catch (_e) {}
   }, [difficulty]);
 
   const loadData = useCallback(async () => {
@@ -113,7 +113,7 @@ function TestSeriesPageContent() {
       try {
         const res = await api.get(`/test-series/search?q=${encodeURIComponent(searchQuery.trim())}`);
         setSearchResults(Array.isArray(res.data) ? res.data : []);
-      } catch {
+      } catch (_e) {
         setSearchResults([]);
       }
       setSearching(false);
@@ -234,7 +234,7 @@ function TestSeriesPageContent() {
         setEnrolledIds(prev => new Set(prev).add(seriesId));
         if (ts) setEnrolledSeries(prev => [...prev, ts]);
       }
-    } catch {}
+    } catch (_e) {}
     setEnrolling(prev => { const n = new Set(prev); n.delete(seriesId); return n; });
   };
 
@@ -249,7 +249,7 @@ function TestSeriesPageContent() {
     try {
       const res = await api.get(`/tests?testSeriesId=${seriesId}`);
       setSeriesTests(Array.isArray(res.data) ? res.data : []);
-    } catch {
+    } catch (_e) {
       setSeriesTests([]);
     }
     setLoadingTests(false);

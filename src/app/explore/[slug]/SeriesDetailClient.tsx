@@ -56,7 +56,7 @@ export default function SeriesDetailClient({ series }: { series: any }) {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/tests?testSeriesId=${series._id}`);
       const json = await res.json();
       setTests(Array.isArray(json.data) ? json.data : []);
-    } catch {
+    } catch (_e) {
       setTests([]);
     }
     setLoadingTests(false);

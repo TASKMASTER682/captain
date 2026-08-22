@@ -53,7 +53,7 @@ function DoubtsPage() {
         const r = await api.get(`/doubts/${activeDoubtId}`);
         if (cancelled) return;
         setDetail(r.data);
-      } catch {}
+      } catch (_e) {}
     };
     fetchDetail();
     // While AI is still generating, poll so the reply appears live.
@@ -64,7 +64,7 @@ function DoubtsPage() {
         setDetail(r.data);
         const d = r.data?.doubt;
         if (d && (d.aiAnswered || d.status !== 'open')) clearInterval(poll);
-      } catch {}
+      } catch (_e) {}
     }, 4000);
     return () => { cancelled = true; clearInterval(poll); };
   }, [activeDoubtId]);

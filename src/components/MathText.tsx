@@ -70,7 +70,7 @@ export function MathText({ text }: { text: string }) {
             );
           }
           return <span key={idx} className="px-0.5" dangerouslySetInnerHTML={{ __html: html }} />;
-        } catch {
+        } catch (_e) {
           return <span key={idx} className="whitespace-pre-line">{seg.value}</span>;
         }
       })}

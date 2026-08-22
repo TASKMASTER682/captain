@@ -69,7 +69,7 @@ function BlogEditor() {
       const res = await api.get(`/materials?${params.toString()}`);
       const existing = attached.map((m: any) => m._id);
       setMaterials((res.data || []).filter((m: any) => !existing.includes(m._id)));
-    } catch { setMaterials([]); }
+    } catch (_e) { setMaterials([]); }
   };
 
   const attachMaterial = (m: any) => {

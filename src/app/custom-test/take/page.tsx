@@ -34,7 +34,7 @@ export default function CustomTestTake() {
       setConfig(cfg);
       setTimeLeft((cfg.timeMinutes || 30) * 60);
       startTimeRef.current = Date.now();
-    } catch { router.push('/custom-test'); }
+    } catch (_e) { router.push('/custom-test'); }
   }, [router]);
 
   // Countdown timer

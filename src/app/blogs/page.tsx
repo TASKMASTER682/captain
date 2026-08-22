@@ -25,7 +25,7 @@ export default function BlogsPage() {
         if (debounced) params.set('search', debounced);
         const res = await api.get(`/blogs/published?${params.toString()}`);
         setBlogs(res.data || []);
-      } catch { setBlogs([]); }
+      } catch (_e) { setBlogs([]); }
       setLoading(false);
     };
     load();

@@ -255,7 +255,7 @@ export default function ProfilePage() {
           localStorage.removeItem(EXPLORE_AGENCY_STORAGE_KEY);
           window.dispatchEvent(new CustomEvent(EXPLORE_AGENCY_CHANGED_EVENT, { detail: null }));
         }
-      } catch {}
+      } catch (_e) {}
 
       setInitial({ agencies: [...selectedAgencyIds], exams: [...selectedExamIds] });
       setSavedOnce(true);

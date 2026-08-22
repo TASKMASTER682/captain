@@ -46,7 +46,7 @@ export default function QrPayment({
         if (pollingRef.current) clearInterval(pollingRef.current);
         setTimeout(() => onSuccess(), 1500);
       }
-    } catch {
+    } catch (_e) {
       // ignore polling errors
     }
   }, [orderId, onSuccess]);

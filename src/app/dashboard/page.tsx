@@ -242,7 +242,7 @@ export default function StudentDashboard() {
       await api.delete(`/enrollments/unenroll/${seriesId}`);
       setEnrolledIds(prev => { const n = new Set(prev); n.delete(seriesId); return n; });
       setEnrolledSeries(prev => prev.filter((t: any) => t._id !== seriesId));
-    } catch {}
+    } catch (_e) {}
     setEnrolling(prev => { const n = new Set(prev); n.delete(seriesId); return n; });
   };
 
@@ -257,7 +257,7 @@ export default function StudentDashboard() {
     try {
       const res = await api.get(`/tests?testSeriesId=${seriesId}`);
       setSeriesTests(Array.isArray(res.data) ? res.data : []);
-    } catch {
+    } catch (_e) {
       setSeriesTests([]);
     }
     setLoadingTests(false);

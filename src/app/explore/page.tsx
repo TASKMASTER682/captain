@@ -60,7 +60,7 @@ function ExplorePageContent() {
         if (cancelled) return;
         setItems(Array.isArray(json?.data) ? json.data : []);
         setPagination(json?.pagination || { total: 0, page: 1, pages: 1 });
-      } catch {
+      } catch (_e) {
         if (!cancelled) setItems([]);
       }
       if (!cancelled) setLoading(false);

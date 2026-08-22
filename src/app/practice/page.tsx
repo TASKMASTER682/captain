@@ -99,7 +99,7 @@ function PracticeContent() {
       const res = await api.get('/bookmarks');
       const bookmarked = res.data.some((bm: any) => bm.questionId._id === qId || bm.questionId === qId);
       setIsBookmarked(bookmarked);
-    } catch {
+    } catch (_e) {
       setIsBookmarked(false);
     }
   };

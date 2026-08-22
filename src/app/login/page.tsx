@@ -74,7 +74,7 @@ function LoginForm() {
       try {
         const hash = new URLSearchParams(window.location.hash.slice(1));
         return hash.get('provider') === 'google';
-      } catch {
+      } catch (_e) {
         return false;
       }
     };
@@ -84,7 +84,7 @@ function LoginForm() {
       try {
         const hash = new URLSearchParams(window.location.hash.slice(1));
         return { token: hash.get('token'), isNewUser: hash.get('new') === '1' };
-      } catch {
+      } catch (_e) {
         return { token: null, isNewUser: false };
       }
     };
@@ -120,7 +120,7 @@ function LoginForm() {
         // Clear the token from the address bar so it isn't left lying around.
         try {
           window.history.replaceState({}, '', '/login');
-        } catch {}
+        } catch (_e) {}
 
         if (isNewUser || user) {
           router.replace(user?.role === 'Super Admin' ? '/admin/dashboard' : '/dashboard');

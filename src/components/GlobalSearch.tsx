@@ -51,7 +51,7 @@ export default function GlobalSearch({ className = '' }: { className?: string })
       try {
         const res = await api.get(`/search?q=${encodeURIComponent(q)}`);
         setGroups(Array.isArray(res?.data?.groups) ? res.data.groups : []);
-      } catch {
+      } catch (_e) {
         setGroups([]);
       }
       setLoading(false);

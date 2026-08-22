@@ -67,7 +67,14 @@ export default function ExamManagement() {
   return (
     <AdminLayout user={user}>
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
+      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-5">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-black font-outfit">Exams</h1>
+          <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 shadow-md shadow-primary/20 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Exam
+          </button>
+        </div>
+
         {loading ? (
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : exams.length === 0 ? (

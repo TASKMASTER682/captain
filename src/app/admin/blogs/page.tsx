@@ -56,6 +56,13 @@ export default function BlogsManagement() {
     <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-5">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-black font-outfit">Blogs</h1>
+          <Link href="/admin/blogs/editor" className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 shadow-md shadow-primary/20 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Blog
+          </Link>
+        </div>
+
         <div className="flex gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2" />

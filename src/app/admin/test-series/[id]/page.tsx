@@ -380,6 +380,16 @@ export default function TestSeriesDetail() {
     <AdminLayout user={me}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-black font-outfit">{testSeries.title}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">{tests.length} test{tests.length !== 1 ? 's' : ''} in this series</p>
+          </div>
+          <button onClick={openCreate} className="px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 shadow-md shadow-primary/20 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> New Test
+          </button>
+        </div>
+
         {tests.length === 0 ? (
           <div className="text-center py-16 border rounded-3xl bg-card text-muted-foreground">
             <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />

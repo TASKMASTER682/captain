@@ -99,6 +99,13 @@ export default function MaterialsManagement() {
     <AdminLayout user={user}>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8 flex flex-col gap-5">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-black font-outfit">Study Materials</h1>
+          <button onClick={openCreate} className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/95 shadow-md shadow-primary/20 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Material
+          </button>
+        </div>
+
         <div className="relative">
           <Search className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2" />
           <input value={search} onChange={e => onSearchChange(e.target.value)} placeholder="Search title, subject, tags..."

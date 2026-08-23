@@ -17,6 +17,16 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      {
+        // The service worker script must always be revalidated, otherwise
+        // browsers can keep running an outdated worker (the cause of the
+        // reload-loop incident in an earlier build).
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
     ];
   },
 };

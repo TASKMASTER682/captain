@@ -1,10 +1,12 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Outfit, Playfair_Display } from 'next/font/google';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ReactQueryProvider } from '@/components/ReactQueryProvider';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ErrorReporter from '@/components/ErrorReporter';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
+import PWARegister from '@/components/PWARegister';
+import InstallPrompt from '@/components/InstallPrompt';
 import { SITE_URL } from '@/lib/config';
 import './globals.css';
 
@@ -36,10 +38,20 @@ export const metadata: Metadata = {
   },
   description: 'Enterprise-grade assessment operating system for competitive exams. Speed analytics, recommendation engine, spaced repetition revision, and original government-standard CBT engine.',
   keywords: ['CBT', 'competitive exams', 'online test series', 'exam preparation', 'mock tests', 'ExamOS'],
+  manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/logo.png',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
     shortcut: '/logo.png',
-    apple: '/logo.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'ExamOS',
   },
   robots: {
     index: true,
@@ -62,6 +74,15 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#7552E0' },
+    { media: '(prefers-color-scheme: dark)', color: '#7552E0' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -69,16 +90,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${outfit.variable} ${playfair.variable} h-full antialiased`} suppressHydrationWarning>
-      <head>
-        {/* Clear any stale service worker from older builds — a leftover SW that
-            can no longer fetch its script (/sw.js → 404) will intercept navigations
-            and loop the page reload, causing the homepage to re-render endlessly. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();})); }`,
-          }}
-        />
-      </head>
       <body className="min-h-full flex flex-col background text-foreground">
         <ErrorBoundary>
           <ReactQueryProvider>
@@ -87,6 +98,8 @@ export default function RootLayout({
             </ThemeProvider>
           </ReactQueryProvider>
         </ErrorBoundary>
+        <PWARegister />
+        <InstallPrompt />
         <ErrorReporter />
         <AnalyticsTracker />
       </body>

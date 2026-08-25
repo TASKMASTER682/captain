@@ -479,6 +479,14 @@ export default function CbtEngine() {
     } catch (err) {
       console.error('Failed to submit exam', err);
       const e: any = err;
+      if (e?.status === 400 && e?.message?.includes('already been submitted')) {
+        // Already submitted (e.g. timer auto-submit raced with manual submit)
+        localStorage.removeItem(`cbt-attempt-${a._id}`);
+        pendingSubmitRef.current = false;
+        exitFullscreen();
+        router.push(`/cbt/results/${a._id}`);
+        return true;
+      }
       if (e?.status === 400) {
         setErrorMessage(e?.message || 'Unable to submit the test. Please try again.');
       }

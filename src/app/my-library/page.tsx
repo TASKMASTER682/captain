@@ -95,7 +95,7 @@ export default function MyLibraryPage() {
         const [recRes, bookRes, subjRes, weakRes, enrollRes] = await Promise.all([
           api.get('/practice/recommendations').catch(() => ({ data: [] })),
           api.get('/bookmarks').catch(() => ({ data: [] })),
-          api.get('/practice/subjects').catch(() => ({ data: [] })),
+          api.get('/practice/subjects').catch((e) => { console.error('[practice subjects]', e); return { data: [] }; }),
           lockedAnalytics,
           api.get('/enrollments/me').catch(() => ({ data: [] })),
         ]);
@@ -462,12 +462,7 @@ export default function MyLibraryPage() {
               </div>
 
               {/* Create Test Form */}
-              {subjects.length === 0 ? (
-                <div className="p-8 text-center border border-dashed border-border rounded-3xl bg-card">
-                  <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No practice subjects available yet. Contact admin to add questions.</p>
-                </div>
-              ) : dailyLimitReached ? (
+              {dailyLimitReached ? (
                 <div className="p-8 text-center border border-amber-500/20 rounded-3xl bg-amber-500/5">
                   <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
                   <h3 className="font-bold text-sm mb-1">Daily Limit Reached</h3>

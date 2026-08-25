@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
 
-const ALL_ROLES = ['User', 'Content Manager', 'Support', 'Super Admin'];
+const ALL_ROLES = ['User', 'Content Manager', 'Support', 'Nerpat', 'Super Admin'];
 const STAFF_ROLES = ['Super Admin', 'Content Manager', 'Support'];
 
 const roleBadge = (role: string) => {

@@ -178,6 +178,7 @@ export default function Home() {
   const navLinks = [
     { label: 'Test Series', href: '/explore' },
     { label: 'Blogs', href: '/blogs' },
+    { label: 'Partner', href: '/partner' },
     { label: 'Mock Tests', href: '#mock-tests' },
     { label: 'Features', href: '#features' },
     { label: 'How It Works', href: '#how-it-works' },
@@ -860,7 +861,7 @@ export default function Home() {
 
           {[
             { h: 'Platform', links: [['Mock Tests', '/login'], ['Practice', '/practice'], ['Doubts', '/doubts'], ['Materials', '/materials']] },
-            { h: 'Resources', links: [['Test Series', '/explore'], ['Blogs', '/blogs'], ['Leaderboards', '/leaderboard'], ['Revision', '/revision'], ['Plans', '/plans']] },
+            { h: 'Resources', links: [['Test Series', '/explore'], ['Blogs', '/blogs'], ['Leaderboards', '/leaderboard'], ['Revision', '/revision'], ['Plans', '/plans'], ['Partner Program', '/partner']] },
             { h: 'Company', links: [['Dashboard', loggedIn ? dashHref : '/login'], ['Sign In', '/login'], ['Create Account', '/login?mode=signup'], ['Announcements', '#']] },
           ].map((col) => (
             <div key={col.h} className="flex flex-col gap-3">

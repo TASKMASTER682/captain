@@ -28,6 +28,7 @@ import {
   X,
   LogOut,
   ChevronDown,
+  Handshake,
 } from 'lucide-react';
 import { clearAuth } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -61,6 +62,7 @@ const navGroups: NavGroup[] = [
       { name: 'Users', href: '/admin/users', icon: Users, color: 'text-rose-500' },
       { name: 'Attempts', href: '/admin/attempts', icon: ClipboardList, color: 'text-violet-500' },
       { name: 'Doubts', href: '/admin/doubts', icon: HelpCircle, color: 'text-amber-500' },
+      { name: 'Partners', href: '/admin/partners', icon: Handshake, color: 'text-emerald-500' },
     ],
   },
   {

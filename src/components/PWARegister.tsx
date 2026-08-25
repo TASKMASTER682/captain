@@ -21,6 +21,10 @@ export default function PWARegister() {
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
+    // Prevent double-registration (React Strict Mode runs effects twice)
+    if ((window as any).__sw_registered) return;
+    (window as any).__sw_registered = true;
+
     const register = () => {
       navigator.serviceWorker
         .register('/sw.js', { scope: '/', updateViaCache: 'none' })
@@ -28,10 +32,16 @@ export default function PWARegister() {
           if (process.env.NODE_ENV !== 'production') {
             // Dev mode: keep the worker alive for installability but make it
             // hands-off. Re-sent whenever the controller takes over.
-            const notify = () =>
+            let notifying = false;
+            const notify = () => {
+              if (notifying) return; // prevent feedback loop
+              notifying = true;
               registration.active?.postMessage({ type: 'DEV_PASSTHROUGH' });
+              setTimeout(() => { notifying = false; }, 1000);
+            };
             notify();
-            navigator.serviceWorker.addEventListener('controllerchange', notify);
+            // Only listen for controllerchange once — avoid infinite loop
+            navigator.serviceWorker.addEventListener('controllerchange', notify, { once: true });
           }
         })
         .catch((error) => {

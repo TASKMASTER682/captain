@@ -4,8 +4,9 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { 
-  ArrowLeft, CheckCircle2, XCircle, Info, BookOpen, 
-  HelpCircle, ChevronRight, Bookmark, Sparkles, Filter, Clock, Timer
+  ArrowLeft, CheckCircle2, XCircle, BookOpen, 
+  ChevronRight, Bookmark, Filter, Clock, Timer,
+  Target, Zap, BookMarked
 } from 'lucide-react';
 import QuestionRenderer from '@/components/QuestionRenderer';
 import Link from 'next/link';
@@ -14,17 +15,22 @@ function PracticeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Filters
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [subject, setSubject] = useState(searchParams.get('subject') || '');
-  const [topic, setTopic] = useState(searchParams.get('topic') || '');
-  const [difficulty, setDifficulty] = useState('');
+  // URL params
+  const source = searchParams.get('source') || ''; // 'weak' | 'slow' | '' (custom)
+  const urlSubject = searchParams.get('subject') || '';
+  const urlTopic = searchParams.get('topic') || '';
+  const urlMode = searchParams.get('mode') || '';
+  const urlLimit = parseInt(searchParams.get('limit') || '10', 10);
 
-  // Fetch available subjects on mount
-  useEffect(() => {
-    api.get('/practice/subjects').then(res => setSubjects(res.data || [])).catch(() => {});
-  }, []);
-  
+  // Filters (for custom practice)
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [subject, setSubject] = useState(urlSubject);
+  const [topic, setTopic] = useState(urlTopic);
+  const [difficulty, setDifficulty] = useState('');
+  const [mode, setMode] = useState<'learning' | 'exam'>(
+    urlMode === 'speed' ? 'exam' : 'learning'
+  );
+
   // Practice Session States
   const [questions, setQuestions] = useState<any[]>([]);
   const [sessionActive, setSessionActive] = useState(false);
@@ -34,25 +40,94 @@ function PracticeContent() {
   const [score, setScore] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'learning' | 'exam'>('learning');
   const [timeLeft, setTimeLeft] = useState(0);
   const [examEnded, setExamEnded] = useState(false);
   const [answersLog, setAnswersLog] = useState<{ q: any; selected: string; correct: boolean }[]>([]);
 
-  // Auto-generate if query parameters exist
+  // Fetch available subjects on mount (for custom practice)
   useEffect(() => {
-    if (searchParams.get('subject') || searchParams.get('topic')) {
+    api.get('/practice/subjects').then(res => setSubjects(res.data || [])).catch(() => {});
+  }, []);
+
+  // Auto-start if URL has source=weak or source=slow (from recommendations/dashboard)
+  useEffect(() => {
+    if (source === 'weak' || source === 'slow') {
+      loadWeakOrSlowQuestions();
+    } else if (searchParams.get('questionIds')) {
+      loadSpecificQuestions();
+    } else if (urlSubject || urlTopic) {
       handleStartPractice();
     }
   }, [searchParams]);
+
+  const loadWeakOrSlowQuestions = async () => {
+    setLoading(true);
+    try {
+      const endpoint = source === 'weak' ? '/practice/weak-questions' : '/practice/slow-questions';
+      const params = new URLSearchParams();
+      if (urlTopic) params.set('topic', urlTopic);
+      if (urlSubject) params.set('subject', urlSubject);
+      params.set('limit', '10');
+
+      const res = await api.get(`${endpoint}?${params.toString()}`);
+      const qs = res.data || [];
+      if (qs.length === 0) {
+        setLoading(false);
+        return;
+      }
+      setQuestions(qs);
+      setSessionActive(true);
+      setCurrentIndex(0);
+      setIsAnswered(false);
+      setSelectedOpt('');
+      setScore(0);
+      setExamEnded(false);
+      setAnswersLog([]);
+      setLoading(false);
+      checkBookmarkStatus(qs[0]?._id || qs[0]?.questionId);
+    } catch (err) {
+      console.error('Failed to load practice questions', err);
+      setLoading(false);
+    }
+  };
+
+  const loadSpecificQuestions = async () => {
+    setLoading(true);
+    try {
+      const questionIds = searchParams.get('questionIds') || '';
+      const res = await api.get(`/practice/generate?questionIds=${encodeURIComponent(questionIds)}`);
+      const qs = res.data || [];
+      if (qs.length === 0) {
+        setLoading(false);
+        return;
+      }
+      setQuestions(qs);
+      setSessionActive(true);
+      setCurrentIndex(0);
+      setIsAnswered(false);
+      setSelectedOpt('');
+      setScore(0);
+      setExamEnded(false);
+      setAnswersLog([]);
+      setLoading(false);
+      checkBookmarkStatus(qs[0]?._id);
+    } catch (err) {
+      console.error('Failed to load practice questions', err);
+      setLoading(false);
+    }
+  };
 
   const handleStartPractice = async () => {
     setLoading(true);
     try {
       const res = await api.get(
-        `/practice/generate?subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&difficulty=${difficulty}&limit=10`
+        `/practice/generate?subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&difficulty=${difficulty}&limit=${urlLimit}`
       );
       const qs = res.data || [];
+      if (qs.length === 0) {
+        setLoading(false);
+        return;
+      }
       setQuestions(qs);
       setSessionActive(true);
       setCurrentIndex(0);
@@ -63,8 +138,6 @@ function PracticeContent() {
       setAnswersLog([]);
       if (mode === 'exam') {
         setTimeLeft(qs.length * 60);
-        setSelectedOpt('');
-        setIsAnswered(false);
       }
       setLoading(false);
       checkBookmarkStatus(qs[0]?._id);
@@ -106,7 +179,7 @@ function PracticeContent() {
 
   const handleToggleBookmark = async () => {
     if (questions.length === 0) return;
-    const qId = questions[currentIndex]._id;
+    const qId = questions[currentIndex]._id || questions[currentIndex].questionId;
     try {
       if (isBookmarked) {
         await api.delete(`/bookmarks/${qId}`);
@@ -120,20 +193,22 @@ function PracticeContent() {
     }
   };
 
+  // Learning mode: instant feedback on option select
   const handleOptionSelect = (key: string) => {
     if (isAnswered) return;
     setSelectedOpt(key);
-  };
 
-  const handleCheckAnswer = () => {
-    if (!selectedOpt || isAnswered) return;
-    setIsAnswered(true);
-    const correct = questions[currentIndex].correctAnswer[0] === selectedOpt;
-    if (correct) {
-      setScore(prev => prev + 1);
+    // In learning mode, immediately show the answer + explanation
+    if (mode === 'learning') {
+      setIsAnswered(true);
+      const correct = questions[currentIndex].correctAnswer.includes(key);
+      if (correct) {
+        setScore(prev => prev + 1);
+      }
     }
   };
 
+  // Exam mode: Save & Next
   const saveAndNext = () => {
     const q = questions[currentIndex];
     const isCorrect = q.correctAnswer.includes(selectedOpt);
@@ -145,27 +220,35 @@ function PracticeContent() {
       setCurrentIndex(nextIdx);
       setIsAnswered(false);
       setSelectedOpt('');
-      checkBookmarkStatus(questions[nextIdx]?._id);
+      checkBookmarkStatus(questions[nextIdx]?._id || questions[nextIdx]?.questionId);
     } else {
-      // Exam finished
       setExamEnded(true);
       setSessionActive(false);
       setTimeLeft(0);
     }
   };
 
+  // Learning mode: Next Question (after instant feedback)
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
       const nextIdx = currentIndex + 1;
       setCurrentIndex(nextIdx);
       setIsAnswered(false);
       setSelectedOpt('');
-      checkBookmarkStatus(questions[nextIdx]?._id);
+      checkBookmarkStatus(questions[nextIdx]?._id || questions[nextIdx]?.questionId);
     } else {
-      // Session finished
       setSessionActive(false);
     }
   };
+
+  // Determine source label for header
+  const getSourceLabel = () => {
+    if (source === 'weak') return { text: 'Weak Topics Practice', icon: Target, color: 'text-rose-500' };
+    if (source === 'slow') return { text: 'Slow Topics Practice', icon: Zap, color: 'text-amber-500' };
+    if (searchParams.get('questionIds')) return { text: 'Saved Questions Practice', icon: BookMarked, color: 'text-indigo-500' };
+    return { text: 'Adaptive Practice Deck', icon: null, color: 'text-primary' };
+  };
+  const sourceInfo = getSourceLabel();
 
   if (loading) {
     return (
@@ -184,7 +267,10 @@ function PracticeContent() {
           <Link href="/dashboard" className="p-2 rounded-xl bg-secondary hover:bg-secondary/80 transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <h1 className="font-bold text-lg font-outfit">Adaptive Practice Deck</h1>
+          <div className="flex items-center gap-2">
+            {sourceInfo.icon && <sourceInfo.icon className={`w-5 h-5 ${sourceInfo.color}`} />}
+            <h1 className="font-bold text-lg font-outfit">{sourceInfo.text}</h1>
+          </div>
         </div>
         {sessionActive && (
           <div className="flex items-center gap-2">
@@ -252,7 +338,7 @@ function PracticeContent() {
             </button>
           </div>
         ) : !sessionActive ? (
-          /* Filter Selection Board */
+          /* Filter Selection Board — only for Custom Practice */
           <div className="p-8 rounded-3xl border border-border bg-card shadow-lg flex flex-col gap-6">
             <div className="flex items-center gap-2 text-primary font-bold">
               <Filter className="w-5 h-5" />
@@ -343,6 +429,14 @@ function PracticeContent() {
           </div>
         ) : (
           /* Active Practice Session interface */
+          questions.length === 0 || !questions[currentIndex] ? (
+          <div className="p-8 rounded-3xl border border-border bg-card shadow-lg flex flex-col gap-4 text-center">
+            <p className="text-sm text-muted-foreground">No questions found matching your filters.</p>
+            <button onClick={() => { setSessionActive(false); setExamEnded(false); }} className="py-3 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/95 transition-all">
+              Try Different Filters
+            </button>
+          </div>
+          ) : (
           <div className="flex flex-col gap-6">
             
             {/* Header progress line */}
@@ -415,15 +509,7 @@ function PracticeContent() {
                   End & Review Answers
                 </button>
               </div>
-            ) : !isAnswered ? (
-              <button 
-                onClick={handleCheckAnswer}
-                disabled={!selectedOpt}
-                className="py-4 rounded-xl bg-primary text-white font-bold hover:bg-primary/95 disabled:opacity-50 transition-all text-sm"
-              >
-                Validate Answer
-              </button>
-            ) : (
+            ) : isAnswered ? (
               <div className="flex flex-col gap-6">
                 
                 {/* Score Alert */}
@@ -435,7 +521,7 @@ function PracticeContent() {
                   {questions[currentIndex].correctAnswer.includes(selectedOpt) ? (
                     <>
                       <CheckCircle2 className="w-5 h-5" />
-                      <span>Correct Answer! You earned 2 points.</span>
+                      <span>Correct Answer! You earned 1 point.</span>
                     </>
                   ) : (
                     <>
@@ -462,9 +548,10 @@ function PracticeContent() {
                 </button>
 
               </div>
-            )}
+            ) : null}
 
           </div>
+          )
         )}
 
       </main>

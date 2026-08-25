@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, setAuthToken, getAuthUser, API_BASE } from '@/lib/api';
 import {
@@ -8,12 +8,6 @@ import {
   Lock,
   User as UserIcon,
   ArrowLeft,
-  Building2,
-  GraduationCap,
-  Search,
-  X,
-  Check,
-  ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,12 +30,6 @@ function LoginForm() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpDevHint, setOtpDevHint] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
-
-  // Agency multi-select
-  const [agencies, setAgencies] = useState<any[]>([]);
-  const [selectedAgencyIds, setSelectedAgencyIds] = useState<string[]>([]);
-  const [agencySearch, setAgencySearch] = useState('');
-  const [agencyDropdownOpen, setAgencyDropdownOpen] = useState(false);
 
   // Email verification required
   const [showVerifyRequired, setShowVerifyRequired] = useState(false);
@@ -135,38 +123,6 @@ function LoginForm() {
     completeGoogleAuth();
   }, [searchParams, router]);
 
-  useEffect(() => {
-    if (isSignUp) {
-      api
-        .get('/agencies')
-        .then((res) => setAgencies(res.data || []))
-        .catch(() => {});
-    }
-  }, [isSignUp]);
-
-  const filteredAgencies = useMemo(() => {
-    if (!agencySearch.trim()) return agencies;
-    const s = agencySearch.toLowerCase();
-    return agencies.filter(
-      (a: any) =>
-        a.name?.toLowerCase().includes(s) || a.code?.toLowerCase().includes(s)
-    );
-  }, [agencies, agencySearch]);
-
-  const toggleAgency = (id: string) => {
-    setSelectedAgencyIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const removeAgency = (id: string) => {
-    setSelectedAgencyIds((prev) => prev.filter((x) => x !== id));
-  };
-
-  const selectedAgencyObjects = agencies.filter((a: any) =>
-    selectedAgencyIds.includes(a._id)
-  );
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -178,7 +134,6 @@ function LoginForm() {
           name,
           email,
           password,
-          agencies: selectedAgencyIds.length ? selectedAgencyIds : undefined,
           referralCode: referralCode || undefined,
           signupSource: referralCode ? 'referral' : undefined,
         });
@@ -432,106 +387,6 @@ function LoginForm() {
           </div>
 
           {/* Multi-select Agencies */}
-          {isSignUp && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">
-                Select Agencies
-              </label>
-              <div className="relative">
-                <Building2 className="w-4.5 h-4.5 text-muted-foreground absolute left-3.5 top-3" />
-                <div
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-border bg-background text-sm min-h-[42px] cursor-pointer flex flex-wrap gap-1.5 items-center"
-                  onClick={() => setAgencyDropdownOpen(!agencyDropdownOpen)}
-                >
-                  {selectedAgencyObjects.length === 0 && (
-                    <span className="text-muted-foreground">
-                      Search and select agencies...
-                    </span>
-                  )}
-                  {selectedAgencyObjects.map((a: any) => (
-                    <span
-                      key={a._id}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-semibold"
-                    >
-                      {a.name}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeAgency(a._id);
-                        }}
-                        className="hover:text-rose-500"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 text-muted-foreground absolute right-3 top-3 transition-transform ${
-                    agencyDropdownOpen ? 'rotate-180' : ''
-                  }`}
-                />
-
-                {agencyDropdownOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-                    <div className="p-2 border-b border-border">
-                      <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          placeholder="Search agencies..."
-                          value={agencySearch}
-                          autoFocus
-                          onChange={(e) => setAgencySearch(e.target.value)}
-                          className="w-full pl-8 pr-3 py-2.5 rounded-lg border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                      </div>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto p-1">
-                      {filteredAgencies.length === 0 ? (
-                        <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-                          No agencies found
-                        </div>
-                      ) : (
-                        filteredAgencies.map((a: any) => {
-                          const selected = selectedAgencyIds.includes(a._id);
-                          return (
-                            <div
-                              key={a._id}
-                              onClick={() => toggleAgency(a._id)}
-                              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                selected
-                                  ? 'bg-primary/10 text-primary font-semibold'
-                                  : 'hover:bg-muted'
-                              }`}
-                            >
-                              <div
-                                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                  selected
-                                    ? 'bg-primary border-primary'
-                                    : 'border-border'
-                                }`}
-                              >
-                                {selected && (
-                                  <Check className="w-3 h-3 text-white" />
-                                )}
-                              </div>
-                              <span className="flex-1">{a.name}</span>
-                              <span className="text-muted-foreground font-mono text-[10px]">
-                                {a.code}
-                              </span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}

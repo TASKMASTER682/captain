@@ -5,7 +5,8 @@ import StudentLayout from '@/components/StudentLayout';
 import { api } from '@/lib/api';
 import { 
   BookMarked, Sparkles, Zap, BrainCircuit, Play, ChevronRight, 
-  Target, AlertCircle, RotateCcw, AlertTriangle 
+  Target, AlertCircle, RotateCcw, AlertTriangle, Clock, Lock,
+  PlusCircle, FileText
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
@@ -60,6 +61,17 @@ export default function MyLibraryPage() {
   const [weakAreas, setWeakAreas] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasActiveSub, setHasActiveSub] = useState(false);
+  const [enrolledSeries, setEnrolledSeries] = useState<any[]>([]);
+
+  // Practice form state
+  const [practiceSubject, setPracticeSubject] = useState('');
+  const [practiceCount, setPracticeCount] = useState(5);
+  const [practiceTime, setPracticeTime] = useState(15);
+  const [showPracticeForm, setShowPracticeForm] = useState(false);
+  const [creatingTest, setCreatingTest] = useState(false);
+  const [dailyUses, setDailyUses] = useState(0);
+  const [dailyLimitReached, setDailyLimitReached] = useState(false);
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -74,22 +86,38 @@ export default function MyLibraryPage() {
         const hasActiveSub =
           activeUser?.subscription?.status === 'active' &&
           (!activeUser?.subscription?.expiresAt || new Date(activeUser.subscription.expiresAt) > new Date());
+        setHasActiveSub(hasActiveSub);
           
         const lockedAnalytics = hasActiveSub
           ? api.get('/my-analytics/weak-areas').catch(() => ({ data: [] }))
           : Promise.resolve({ data: [] });
 
-        const [recRes, bookRes, subjRes, weakRes] = await Promise.all([
+        const [recRes, bookRes, subjRes, weakRes, enrollRes] = await Promise.all([
           api.get('/practice/recommendations').catch(() => ({ data: [] })),
           api.get('/bookmarks').catch(() => ({ data: [] })),
           api.get('/practice/subjects').catch(() => ({ data: [] })),
-          lockedAnalytics
+          lockedAnalytics,
+          api.get('/enrollments/me').catch(() => ({ data: [] })),
         ]);
         
         setRecs(Array.isArray(recRes.data) ? recRes.data : []);
         setBookmarks(Array.isArray(bookRes.data) ? bookRes.data : []);
         setSubjects(Array.isArray(subjRes.data) ? subjRes.data : []);
         setWeakAreas(Array.isArray(weakRes.data) ? weakRes.data : []);
+        setEnrolledSeries(Array.isArray(enrollRes.data) ? enrollRes.data : []);
+
+        // Track daily usage for free users (max 1 use per 24 hours)
+        const isFreeUser = !hasActiveSub && (!enrollRes.data || enrollRes.data.length === 0);
+        if (isFreeUser) {
+          const usageData = JSON.parse(localStorage.getItem('infinitePracticeUsage') || '{"date":"","count":0}');
+          const today = new Date().toDateString();
+          if (usageData.date === today) {
+            setDailyUses(usageData.count);
+            if (usageData.count >= 1) setDailyLimitReached(true);
+          } else {
+            localStorage.setItem('infinitePracticeUsage', JSON.stringify({ date: today, count: 0 }));
+          }
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -104,6 +132,84 @@ export default function MyLibraryPage() {
     { id: 'bookmarks', label: 'Saved Questions', icon: BookMarked },
     { id: 'practice', label: 'Infinite Practice', icon: Zap },
   ];
+
+  const handleCreateTest = async () => {
+    if (!practiceSubject || creatingTest) return;
+
+    const isFreeUser = !hasActiveSub && enrolledSeries.length === 0;
+    const count = isFreeUser ? Math.min(practiceCount, 5) : practiceCount;
+
+    // Check daily limit for free users
+    if (isFreeUser && dailyLimitReached) return;
+
+    setCreatingTest(true);
+    try {
+      // Find examId from enrolled series that has this subject
+      const setupRes = await api.get('/custom-tests/setup');
+      const exams = setupRes.data?.exams || [];
+
+      // Try to find exam through the enrollment chain
+      let examId = null;
+      for (const enrollment of enrolledSeries) {
+        const seriesId = enrollment.testSeriesId?._id || enrollment.testSeriesId;
+        if (!seriesId) continue;
+        try {
+          const seriesRes = await api.get(`/test-series/${seriesId}`);
+          const series = seriesRes.data;
+          if (series?.examId?._id) {
+            examId = series.examId._id;
+            break;
+          }
+        } catch (_e) {}
+      }
+
+      // Fallback: use first available exam
+      if (!examId && exams.length > 0) {
+        examId = exams[0]._id;
+      }
+
+      if (!examId) {
+        setCreatingTest(false);
+        return;
+      }
+
+      const createRes = await api.post('/custom-tests/create', {
+        examId,
+        subject: practiceSubject,
+        count,
+        timeMinutes: practiceTime,
+      });
+
+      const testData = createRes.data;
+      if (testData?.questions?.length > 0) {
+        // Store config in localStorage and navigate to take page
+        localStorage.setItem('custom-test-config', JSON.stringify({
+          examId,
+          examName: 'Quick Practice',
+          subject: practiceSubject,
+          questions: testData.questions,
+          totalQuestions: testData.questions.length,
+          timeMinutes: practiceTime,
+        }));
+
+        // Track usage for free users
+        if (isFreeUser) {
+          const usageData = JSON.parse(localStorage.getItem('infinitePracticeUsage') || '{"date":"","count":0}');
+          const today = new Date().toDateString();
+          const newCount = usageData.date === today ? usageData.count + 1 : 1;
+          localStorage.setItem('infinitePracticeUsage', JSON.stringify({ date: today, count: newCount }));
+          setDailyUses(newCount);
+          if (newCount >= 1) setDailyLimitReached(true);
+        }
+
+        window.location.href = '/custom-test/take';
+      }
+    } catch (err) {
+      console.error('Failed to create practice test', err);
+    } finally {
+      setCreatingTest(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -290,7 +396,7 @@ export default function MyLibraryPage() {
                     return (
                       <Link 
                         key={idx}
-                        href={`/practice?subject=${encodeURIComponent(q.subject || '')}&topic=${encodeURIComponent(q.topic || '')}`}
+                        href={`/practice?questionIds=${encodeURIComponent(q._id || '')}`}
                         className="p-4 rounded-xl border border-border bg-card flex items-start gap-4 hover:border-primary/40 hover:bg-muted/50 transition-all group"
                       >
                         <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
@@ -336,66 +442,177 @@ export default function MyLibraryPage() {
           {/* Infinite Practice */}
           {activeTab === 'practice' && (
             <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-               <div className="p-8 rounded-3xl border-2 border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-card flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
-                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl group-hover:bg-amber-500/20 transition-colors duration-700"></div>
-                  
-                  <div className="flex-1 relative z-10">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20 text-xs font-bold mb-4">
-                      <Zap className="w-3.5 h-3.5 fill-amber-500" /> Premium Feature
-                    </div>
-                    <h2 className="text-2xl md:text-3xl font-black font-outfit mb-3">Infinite Practice Mode</h2>
-                    <p className="text-muted-foreground text-sm md:text-base max-w-lg">
-                      Enter a never-ending stream of questions tailored to your exact weaknesses. Perfect for quick sessions on the go.
+              
+              {/* Premium Banner */}
+              <div className="p-6 rounded-3xl border border-primary/20 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Zap className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-lg font-bold font-outfit">Create Test</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Generate a custom practice test. Choose subject, question count, and time limit.
+                  </p>
+                </div>
+                {!hasActiveSub && enrolledSeries.length === 0 && (
+                  <div className="text-[10px] text-amber-600 font-semibold bg-amber-500/10 px-3 py-1.5 rounded-lg">
+                    Free: 5 questions, 1 test/day
+                  </div>
+                )}
+              </div>
+
+              {/* Create Test Form */}
+              {subjects.length === 0 ? (
+                <div className="p-8 text-center border border-dashed border-border rounded-3xl bg-card">
+                  <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No practice subjects available yet. Contact admin to add questions.</p>
+                </div>
+              ) : dailyLimitReached ? (
+                <div className="p-8 text-center border border-amber-500/20 rounded-3xl bg-amber-500/5">
+                  <Lock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+                  <h3 className="font-bold text-sm mb-1">Daily Limit Reached</h3>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Free users can create 1 test per day. Come back tomorrow or upgrade for unlimited access.
+                  </p>
+                  <Link href="/plans" className="px-5 py-2 bg-amber-500 text-white text-xs font-bold rounded-xl hover:bg-amber-600 transition-all inline-flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" /> Upgrade Now
+                  </Link>
+                </div>
+              ) : !showPracticeForm ? (
+                <button
+                  onClick={() => setShowPracticeForm(true)}
+                  className="p-6 rounded-3xl border-2 border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 transition-all flex items-center gap-4 group"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
+                    <PlusCircle className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-bold text-sm font-outfit">Create New Test</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Select subject, choose question count and time limit
                     </p>
-                    
-                    {subjects.length === 0 ? (
-                      <div className="mt-6">
-                        <p className="text-sm font-semibold text-rose-500 mb-3">Enroll in a test series to unlock practice subjects.</p>
-                        <Link href="/test-series" className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-500/25 inline-flex items-center gap-2">
-                          Browse Test Series
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="mt-6">
-                        <p className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-wider">Select Subject to Start:</p>
-                        <div className="flex flex-wrap gap-3">
-                          {subjects.map((s: string) => (
-                            <Link key={s} href={`/practice?subject=${encodeURIComponent(s)}`}
-                              className="px-5 py-2.5 rounded-xl border border-amber-500/30 bg-background hover:bg-amber-500 hover:text-white hover:border-amber-500 text-sm font-semibold transition-all shadow-sm"
-                            >
-                              {s}
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+                </button>
+              ) : (
+                <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-sm font-outfit">Test Configuration</h3>
+                    <button onClick={() => setShowPracticeForm(false)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+
+                  {/* Subject */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Subject *</label>
+                    <select 
+                      value={practiceSubject}
+                      onChange={(e) => setPracticeSubject(e.target.value)}
+                      className="px-4 py-3 rounded-xl border border-border bg-background text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none"
+                    >
+                      <option value="">Select Subject</option>
+                      {subjects.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Question Count */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Number of Questions</label>
+                    <div className="flex items-center gap-2">
+                      {[5, 10, 15, 20].map((n) => {
+                        const isLocked = n > 5 && !hasActiveSub && enrolledSeries.length === 0;
+                        return (
+                          <button
+                            key={n}
+                            onClick={() => !isLocked && setPracticeCount(n)}
+                            className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all relative ${
+                              practiceCount === n
+                                ? 'bg-primary text-white shadow-md shadow-primary/20'
+                                : isLocked
+                                ? 'bg-secondary text-muted-foreground/50 cursor-not-allowed'
+                                : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                            }`}
+                          >
+                            {n}
+                            {isLocked && <Lock className="w-3 h-3 absolute top-1 right-1 text-amber-500" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {!hasActiveSub && enrolledSeries.length === 0 && (
+                      <p className="text-[10px] text-amber-600 font-semibold">
+                        Free plan: max 5 questions. <Link href="/plans" className="underline">Upgrade</Link> for more.
+                      </p>
                     )}
                   </div>
-                  
-                  <div className="w-full md:w-1/3 relative z-10 flex justify-center hidden md:flex">
-                    <div className="w-48 h-48 relative">
-                      <div className="absolute inset-0 border-[8px] border-amber-500/20 rounded-full animate-[spin_10s_linear_infinite]"></div>
-                      <div className="absolute inset-2 border-[4px] border-amber-500/40 rounded-full animate-[spin_7s_linear_infinite_reverse]"></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Zap className="w-16 h-16 text-amber-500 fill-amber-500 drop-shadow-lg" />
-                      </div>
+
+                  {/* Time Limit */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Time Limit</label>
+                    <div className="flex items-center gap-2">
+                      {[10, 15, 20, 30].map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setPracticeTime(t)}
+                          className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${
+                            practiceTime === t
+                              ? 'bg-primary text-white shadow-md shadow-primary/20'
+                              : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                          }`}
+                        >
+                          {t}m
+                        </button>
+                      ))}
                     </div>
                   </div>
-               </div>
 
-               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
-                  <div className="p-5 rounded-2xl border border-border bg-card text-center">
-                    <div className="text-2xl font-black text-amber-500 mb-1">Adaptive</div>
-                    <p className="text-xs text-muted-foreground">Questions adjust to your current skill level in real-time.</p>
-                  </div>
-                  <div className="p-5 rounded-2xl border border-border bg-card text-center">
-                    <div className="text-2xl font-black text-amber-500 mb-1">Micro-Learning</div>
-                    <p className="text-xs text-muted-foreground">Practice for 5 minutes or 5 hours. It's up to you.</p>
-                  </div>
-                  <div className="p-5 rounded-2xl border border-border bg-card text-center">
-                    <div className="text-2xl font-black text-amber-500 mb-1">Rewards</div>
-                    <p className="text-xs text-muted-foreground">Earn streak multipliers and XP points faster.</p>
-                  </div>
-               </div>
+                  {/* Daily usage indicator for free users */}
+                  {!hasActiveSub && enrolledSeries.length === 0 && (
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <Clock className="w-3 h-3" />
+                      <span>Daily uses remaining: <strong className="text-foreground">{1 - dailyUses}</strong> / 1</span>
+                    </div>
+                  )}
+
+                  {/* Generate Button */}
+                  <button
+                    onClick={handleCreateTest}
+                    disabled={!practiceSubject || creatingTest}
+                    className="py-4 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {creatingTest ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        Creating Test...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-white" />
+                        Start Test ({practiceCount} Questions, {practiceTime}m)
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Feature Highlights */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-5 rounded-2xl border border-border bg-card text-center">
+                  <div className="text-2xl font-black text-primary mb-1">Instant</div>
+                  <p className="text-xs text-muted-foreground">See answers and explanations immediately after submitting.</p>
+                </div>
+                <div className="p-5 rounded-2xl border border-border bg-card text-center">
+                  <div className="text-2xl font-black text-primary mb-1">Adaptive</div>
+                  <p className="text-xs text-muted-foreground">Questions from your enrolled test series question bank.</p>
+                </div>
+                <div className="p-5 rounded-2xl border border-border bg-card text-center">
+                  <div className="text-2xl font-black text-primary mb-1">Custom</div>
+                  <p className="text-xs text-muted-foreground">Choose subject, question count, and time limit.</p>
+                </div>
+              </div>
             </div>
           )}
 

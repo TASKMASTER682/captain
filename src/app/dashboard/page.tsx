@@ -744,6 +744,35 @@ export default function StudentDashboard() {
           </div>
         )}
 
+        {/* Weak Areas */}
+        {weakAreas.length > 0 && (
+          <div className="p-6 rounded-3xl border border-border bg-card flex flex-col gap-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold font-outfit flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-500" /> Weak Topics
+              </h3>
+              <Link href="/my-library" className="text-xs font-bold text-primary hover:underline flex items-center gap-1">
+                View All <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {weakAreas.slice(0, 6).map((area: any, idx: number) => (
+                <Link
+                  key={idx}
+                  href={`/practice?source=weak&topic=${encodeURIComponent(area.topic)}&subject=${encodeURIComponent(area.subject || '')}`}
+                  className="p-3.5 rounded-2xl border border-rose-500/20 bg-rose-500/5 flex justify-between items-center text-xs hover:border-rose-500/40 hover:bg-rose-500/10 transition-all group"
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="font-bold truncate group-hover:text-rose-500 transition-colors">{area.topic}</span>
+                    {area.subject && <span className="text-[10px] text-muted-foreground truncate">{area.subject}</span>}
+                  </div>
+                  <span className="text-rose-500 font-mono font-bold shrink-0 ml-2">{Math.round(area.accuracy)}%</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Main body grids */}
         <div className="flex flex-col gap-8">
           

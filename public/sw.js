@@ -47,8 +47,13 @@ self.addEventListener('activate', (event) => {
       await Promise.all(
         names
           .filter((name) => name.startsWith('examos-') && name !== STATIC_CACHE && name !== PAGES_CACHE)
-          .map((name) => caches.delete(name))
+          .map((name) => caches.delete(name)
+        )
       );
+      // Only claim clients in production to avoid reload loops in dev
+      if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') {
+        return;
+      }
       await self.clients.claim();
     })()
   );

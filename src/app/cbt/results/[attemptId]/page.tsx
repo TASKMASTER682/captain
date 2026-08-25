@@ -424,7 +424,7 @@ export default function AttemptResults() {
                     {analytics.weakAreas.map((area: any) => (
                       <Link
                         key={area.topic}
-                        href={`/practice?subject=${encodeURIComponent(attempt.answers.find((a:any) => a.questionId.topic === area.topic)?.questionId.subject || '')}&topic=${encodeURIComponent(area.topic)}`}
+                        href={`/practice?source=weak&subject=${encodeURIComponent(attempt.answers.find((a:any) => a.questionId.topic === area.topic)?.questionId.subject || '')}&topic=${encodeURIComponent(area.topic)}`}
                         className="flex items-center justify-between p-3 rounded-xl bg-card border border-border hover:border-rose-500/30 hover:bg-rose-500/5 transition-all group"
                       >
                         <div className="flex items-center gap-2.5">

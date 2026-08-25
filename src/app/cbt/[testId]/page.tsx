@@ -594,6 +594,15 @@ export default function CbtEngine() {
 
   const currentQuestion = attempt?.answers?.[currentIndex]?.questionId;
 
+  // Find the section this question belongs to (for correct marks display)
+  const currentSection = test?.sections?.find((sec: any) => {
+    const qId = currentQuestion?._id?.toString();
+    return sec.questions?.some((q: any) => {
+      const id = typeof q === 'string' ? q : q._id;
+      return id?.toString() === qId;
+    });
+  });
+
   // Question counters
   const answeredCount = attempt?.answers?.filter((a: any) => a.status === 'Answered').length || 0;
   const markedReviewCount = attempt?.answers?.filter((a: any) => a.status === 'Marked for Review' || a.status === 'Answered & Marked for Review').length || 0;
@@ -728,8 +737,8 @@ export default function CbtEngine() {
               <>
             <div className="flex justify-end items-center text-xs text-muted-foreground">
               <div className="flex gap-4">
-                <span className="text-emerald-500 font-semibold">Marks: +{currentQuestion.marks ?? 1}</span>
-                <span className="text-rose-500 font-semibold">Negative: -{currentQuestion.negativeMarks ?? 0}</span>
+                <span className="text-emerald-500 font-semibold">Marks: +{currentSection?.marksPerQuestion ?? currentQuestion.marks ?? 1}</span>
+                <span className="text-rose-500 font-semibold">Negative: -{currentSection?.negativeMarking ? (currentSection.negativeMarksPerQuestion ?? 0) : 0}</span>
               </div>
             </div>
 

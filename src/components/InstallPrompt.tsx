@@ -153,7 +153,8 @@ export default function InstallPrompt() {
       const source = capturedEvent ?? installEvent;
       const debug = isDebugEnabled();
       const ios = isIos();
-      const capable = source !== null || ios;
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const capable = source !== null || ios || isMobile;
 
       // One-line diagnostic so a missing button is never a mystery.
       if (!logged) {
@@ -194,7 +195,7 @@ export default function InstallPrompt() {
             setShowButton(false);
             return;
           }
-          setIsIosDevice(source === null);
+          setIsIosDevice(source === null && (ios || isMobile));
           setShowButton(true);
         },
         debug ? 0 : SHOW_DELAY_MS
@@ -220,7 +221,8 @@ export default function InstallPrompt() {
   const handleClick = useCallback(async () => {
     const source = installEvent ?? capturedEvent;
     if (!source) {
-      // iOS & friends: no install API — open the manual hint bubble.
+      // No install API available (iOS, or Android before beforeinstallprompt fired)
+      // Show manual install instructions
       setHintOpen((open) => !open);
       return;
     }
@@ -270,16 +272,29 @@ export default function InstallPrompt() {
               <X className="w-3.5 h-3.5" />
             </button>
             <h3 className="text-xs font-bold font-outfit pr-5">Install ExamOS</h3>
-            <ol className="mt-2 space-y-1.5 text-[11px] text-foreground/90">
-              <li className="flex items-center gap-2">
-                <span className="w-5 h-5 shrink-0 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center"><Share className="w-3 h-3 text-primary" /></span>
-                Tap the <strong>Share</strong> button
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-5 h-5 shrink-0 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center"><Plus className="w-3 h-3 text-primary" /></span>
-                Choose <strong>Add to Home Screen</strong>
-              </li>
-            </ol>
+            {isIosDevice ? (
+              <ol className="mt-2 space-y-1.5 text-[11px] text-foreground/90">
+                <li className="flex items-center gap-2">
+                  <span className="w-5 h-5 shrink-0 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center"><Share className="w-3 h-3 text-primary" /></span>
+                  Tap the <strong>Share</strong> button
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-5 h-5 shrink-0 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center"><Plus className="w-3 h-3 text-primary" /></span>
+                  Choose <strong>Add to Home Screen</strong>
+                </li>
+              </ol>
+            ) : (
+              <ol className="mt-2 space-y-1.5 text-[11px] text-foreground/90">
+                <li className="flex items-center gap-2">
+                  <span className="w-5 h-5 shrink-0 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center"><Download className="w-3 h-3 text-primary" /></span>
+                  Tap the <strong>three dots</strong> menu
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-5 h-5 shrink-0 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center"><Plus className="w-3 h-3 text-primary" /></span>
+                  Choose <strong>Add to Home Screen</strong>
+                </li>
+              </ol>
+            )}
             <button
               onClick={dismissForDays}
               className="mt-2.5 flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-colors"

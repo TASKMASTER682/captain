@@ -381,6 +381,35 @@ export default function Home() {
             {/* Glow behind preview */}
             <div className="absolute inset-0 -z-10 rounded-[2rem] bg-gradient-to-tr from-primary/20 via-transparent to-accent/20 blur-2xl" />
 
+            {/* Floating chips — outside MCQ card, horizontal row */}
+            <div className="flex items-center gap-3 mb-4">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.5 }}
+                className="animate-float"
+              >
+                <div className="px-4 py-3 rounded-2xl bg-card border border-border shadow-xl shadow-primary/10 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-500 to-primary text-white flex items-center justify-center"><Bot className="w-5 h-5" /></div>
+                  <div>
+                    <p className="text-[11px] font-bold">AI Doubt Saved</p>
+                    <p className="text-[10px] text-muted-foreground">Solution solved step-by-step</p>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9, duration: 0.5 }}
+                className="animate-float-slow"
+              >
+                <div className="px-4 py-3 rounded-2xl bg-card border border-border shadow-xl shadow-amber-500/10 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center"><Flame className="w-5 h-5 fill-amber-500/40" /></div>
+                  <div>
+                    <p className="text-[11px] font-bold">14-Day Streak</p>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Crown className="w-3 h-3 text-amber-500" /> Rank #12 in SSC Leaderboard</p>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
             <div className="rounded-3xl overflow-hidden border border-border bg-card shadow-2xl shadow-primary/10">
               {/* Window chrome */}
               <div className="flex items-center justify-between border-b border-border px-5 py-3">
@@ -440,34 +469,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-
-            {/* Floating chip: AI doubt */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.5 }}
-              className="absolute -left-4 sm:-left-8 top-8 animate-float"
-            >
-              <div className="px-4 py-3 rounded-2xl bg-card border border-border shadow-xl shadow-primary/10 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-500 to-primary text-white flex items-center justify-center"><Bot className="w-5 h-5" /></div>
-                <div>
-                  <p className="text-[11px] font-bold">AI Doubt Saved</p>
-                  <p className="text-[10px] text-muted-foreground">Solution solved step-by-step</p>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Floating chip: Gamification */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9, duration: 0.5 }}
-              className="absolute -right-3 sm:-right-6 bottom-20 animate-float-slow"
-            >
-              <div className="px-4 py-3 rounded-2xl bg-card border border-border shadow-xl shadow-amber-500/10 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center"><Flame className="w-5 h-5 fill-amber-500/40" /></div>
-                <div>
-                  <p className="text-[11px] font-bold">14-Day Streak</p>
-                  <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Crown className="w-3 h-3 text-amber-500" /> Rank #12 in SSC Leaderboard</p>
-                </div>
-              </div>
-            </motion.div>
           </div>
         </main>
       </section>

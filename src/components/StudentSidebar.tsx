@@ -16,6 +16,7 @@ import {
   CreditCard,
   User,
   BarChart3,
+  Handshake,
   Menu,
   X,
   LogOut,
@@ -55,6 +56,7 @@ export default function StudentSidebar({
     { name: 'Blogs', href: '/blogs', icon: Newspaper, color: 'text-sky-500' },
     { name: 'My Orders', href: '/orders', icon: Receipt, color: 'text-cyan-500' },
     { name: 'Plans & Pricing', href: '/plans', icon: CreditCard, color: 'text-emerald-500' },
+    { name: 'Partner Program', href: '/partner', icon: Handshake, color: 'text-violet-500' },
     { name: 'Profile', href: '/profile', icon: User, color: 'text-sky-500' },
     { name: 'Performance', href: '/performance', icon: BarChart3, color: 'text-primary' },
   ];

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Handshake, CheckCircle2, XCircle, FileText, Send, Shield,
-  BarChart3, DollarSign, Users, BookOpen, AlertTriangle, ArrowRight,
+  BarChart3, Users, BookOpen, AlertTriangle, ArrowRight,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
@@ -48,7 +48,7 @@ const STEPS = [
   { step: 2, title: 'Get Approved', description: 'Our team reviews your application within 48 hours.' },
   { step: 3, title: 'Submit Test Series', description: 'Create test series and submit questions as plain text.' },
   { step: 4, title: 'Admin Verification', description: 'Admin reviews, formats, and approves your questions.' },
-  { step: 5, title: 'Go Live & Earn', description: 'Published series earn 40% revenue share on every sale.' },
+  { step: 5, title: 'Go Live & Earn', description: 'Published series start earning revenue on every sale.' },
 ];
 
 export default function PartnerPage() {
@@ -125,7 +125,7 @@ export default function PartnerPage() {
               Partner with ExamOS
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-              Share your test series with thousands of students. Earn 40% revenue on every sale while we handle the platform, payments, and distribution.
+              Share your test series with thousands of students. We handle the platform, payments, and distribution.
             </p>
             <button
               onClick={() => setShowForm(true)}
@@ -186,28 +186,6 @@ export default function PartnerPage() {
               <p className="text-xs text-muted-foreground leading-relaxed">{c.description}</p>
             </motion.div>
           ))}
-        </div>
-      </section>
-
-      {/* Revenue Split */}
-      <section className="max-w-5xl mx-auto px-4 py-16 border-t border-border">
-        <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold font-outfit mb-2">Revenue Sharing</h2>
-          <p className="text-muted-foreground text-sm">Transparent and fair revenue distribution</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg mx-auto">
-          <div className="p-6 rounded-2xl border-2 border-primary/30 bg-primary/5 text-center">
-            <DollarSign className="w-8 h-8 text-primary mx-auto mb-2" />
-            <div className="text-3xl font-black text-primary">40%</div>
-            <div className="text-sm font-bold mt-1">Your Share</div>
-            <p className="text-xs text-muted-foreground mt-2">Of every sale goes directly to you</p>
-          </div>
-          <div className="p-6 rounded-2xl border border-border bg-card text-center">
-            <DollarSign className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-            <div className="text-3xl font-black">60%</div>
-            <div className="text-sm font-bold mt-1">Platform Share</div>
-            <p className="text-xs text-muted-foreground mt-2">Covers hosting, payments, and distribution</p>
-          </div>
         </div>
       </section>
 

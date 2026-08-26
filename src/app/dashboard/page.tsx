@@ -455,22 +455,28 @@ export default function StudentDashboard() {
     <StudentLayout user={user}>
 
       {/* Global search + Agency explorer — pick an agency to browse its exams (preferences untouched) */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {needsPreferences ? (
-          <Link
-            href="/profile"
-            className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-500 hover:bg-rose-500 hover:border-rose-500 hover:text-white text-sm font-bold transition-all shadow-sm group animate-pulse-border"
-          >
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            Set Your Preferences
-            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-          </Link>
-        ) : (
-          <div className="shrink-0">
-            <AgencyPicker />
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          {needsPreferences ? (
+            <Link
+              href="/profile"
+              className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-500 hover:bg-rose-500 hover:border-rose-500 hover:text-white text-sm font-bold transition-all shadow-sm group animate-pulse-border"
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              Set Your Preferences
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+          ) : (
+            <div className="shrink-0">
+              <AgencyPicker />
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 text-xs font-bold text-lime-400 shrink-0 px-3 py-1.5 rounded-xl border border-lime-400/30 bg-[#0a0a0a]">
+            <Calendar className="w-3.5 h-3.5" />
+            {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
           </div>
-        )}
-        <GlobalSearch className="w-full sm:w-auto sm:flex-1 sm:max-w-xl sm:ml-auto" />
+        </div>
+        <GlobalSearch className="w-full sm:w-1/2 sm:min-w-[320px] sm:ml-auto" />
       </div>
         
         {/* Gamification */}

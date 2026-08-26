@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { 
   ArrowLeft, CheckCircle2, XCircle, BookOpen, 
   ChevronRight, Bookmark, Filter, Clock, Timer,
-  Target, Zap, BookMarked
+  Target, Zap, BookMarked, Flag
 } from 'lucide-react';
 import QuestionRenderer from '@/components/QuestionRenderer';
 import Link from 'next/link';
@@ -39,6 +39,11 @@ function PracticeContent() {
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDesc, setReportDesc] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [examEnded, setExamEnded] = useState(false);
@@ -191,6 +196,28 @@ function PracticeContent() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportReason || submittingReport) return;
+    setSubmittingReport(true);
+    try {
+      await api.post('/question-reports', {
+        questionId: questions[currentIndex]._id || questions[currentIndex].questionId,
+        reason: reportReason,
+        description: reportDesc,
+      });
+      setReportSubmitted(true);
+      setTimeout(() => {
+        setShowReportModal(false);
+        setReportSubmitted(false);
+        setReportReason('');
+        setReportDesc('');
+      }, 2000);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to submit report.');
+    }
+    setSubmittingReport(false);
   };
 
   // Learning mode: instant feedback on option select
@@ -447,17 +474,26 @@ function PracticeContent() {
 
             {/* Question card */}
             <div className="p-8 rounded-3xl border border-border bg-card flex flex-col gap-6 shadow-sm relative">
-              <button 
-                onClick={handleToggleBookmark}
-                className={`absolute top-6 right-6 p-2 rounded-xl border transition-colors ${
-                  isBookmarked 
-                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' 
-                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-                }`}
-                title="Bookmark Question"
-              >
-                <Bookmark className="w-5 h-5" />
-              </button>
+              <div className="absolute top-6 right-6 flex items-center gap-2">
+                <button 
+                  onClick={handleToggleBookmark}
+                  className={`p-2 rounded-xl border transition-colors ${
+                    isBookmarked 
+                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' 
+                      : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                  title="Bookmark Question"
+                >
+                  <Bookmark className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => { setShowReportModal(true); setReportSubmitted(false); setReportReason(''); setReportDesc(''); }}
+                  className="p-2 rounded-xl border bg-secondary border-border text-muted-foreground hover:text-rose-500 hover:border-rose-500/20 transition-colors"
+                  title="Report Question"
+                >
+                  <Flag className="w-5 h-5" />
+                </button>
+              </div>
 
               <QuestionRenderer question={questions[currentIndex]} showOptions={false} showHeader={false} />
 
@@ -555,6 +591,58 @@ function PracticeContent() {
         )}
 
       </main>
+
+      {/* Report Question Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            {reportSubmitted ? (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                <p className="text-sm font-bold text-foreground">Report submitted!</p>
+                <p className="text-xs text-muted-foreground">We'll review it shortly.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold font-outfit">Report Question</h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+                </div>
+                <p className="text-xs text-muted-foreground">Why are you reporting this question?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Wrong Answer', 'Missing Option', 'Wrong Question', 'Duplicate Question', 'Incomplete Question', 'Spelling Error', 'Image Issue', 'Other'].map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setReportReason(r)}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ${
+                        reportReason === r
+                          ? 'border-rose-500 bg-rose-500/10 text-rose-500'
+                          : 'border-border bg-secondary text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  placeholder="Additional details (optional)"
+                  value={reportDesc}
+                  onChange={(e) => setReportDesc(e.target.value)}
+                  rows={3}
+                  className="px-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 resize-none"
+                />
+                <button
+                  onClick={handleSubmitReport}
+                  disabled={!reportReason || submittingReport}
+                  className="py-2.5 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 disabled:opacity-40 transition-all"
+                >
+                  {submittingReport ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground mt-auto">

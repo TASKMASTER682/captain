@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Users, CheckCircle2, XCircle, Clock, Eye, MessageSquare,
-  DollarSign, BookOpen, ArrowRight, Loader2, BarChart3,
+  DollarSign, BookOpen, ArrowRight, Loader2, BarChart3, Save,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -60,6 +60,8 @@ export default function AdminPartnersPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [editedShares, setEditedShares] = useState<Record<string, number>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -88,6 +90,21 @@ export default function AdminPartnersPage() {
       loadData();
     } catch (err) {
       // handle error
+    }
+  };
+
+  const handleUpdateRevenueShare = async (id: string) => {
+    const val = editedShares[id];
+    if (val === undefined) return;
+    setSavingId(id);
+    try {
+      await api.patch(`/admin/partner/partners/${id}/revenue-share`, { revenueShare: val });
+      setEditedShares((prev) => { const n = { ...prev }; delete n[id]; return n; });
+      loadData();
+    } catch (err) {
+      // handle error
+    } finally {
+      setSavingId(null);
     }
   };
 
@@ -157,6 +174,37 @@ export default function AdminPartnersPage() {
                             {p.totalSales} sales · ₹{p.totalEarnings} earned
                           </p>
                         )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-muted-foreground">Revenue Share:</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={editedShares[p._id] ?? p.revenueShare}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              if (val >= 0 && val <= 100) {
+                                setEditedShares((prev) => ({ ...prev, [p._id]: val }));
+                              }
+                            }}
+                            className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                          <span className="text-xs text-muted-foreground">%</span>
+                          {editedShares[p._id] !== undefined && editedShares[p._id] !== p.revenueShare && (
+                            <button
+                              onClick={() => handleUpdateRevenueShare(p._id)}
+                              disabled={savingId === p._id}
+                              className="px-2 py-1 rounded-lg bg-primary text-white text-[10px] font-bold hover:bg-primary/90 transition-all flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {savingId === p._id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Save className="w-3 h-3" />
+                              )}
+                              Save
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {p.status === 'pending' && (

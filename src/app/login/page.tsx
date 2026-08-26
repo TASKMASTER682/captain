@@ -111,7 +111,8 @@ function LoginForm() {
         } catch (_e) {}
 
         if (isNewUser || user) {
-          router.replace(user?.role === 'Super Admin' ? '/admin/dashboard' : '/dashboard');
+          const role = user?.role || getAuthUser()?.role;
+          router.replace(role === 'Super Admin' ? '/admin/dashboard' : role === 'partner' ? '/partner/dashboard' : '/dashboard');
         }
       } catch (err: any) {
         setError(err.message || 'Google sign-in failed. Please try again.');
@@ -140,7 +141,8 @@ function LoginForm() {
 
         if (res.emailVerified) {
           setAuthToken(res.data.token, res.data.user);
-          router.push(getSafeRedirect() || '/dashboard');
+          const role = res.data.user?.role || getAuthUser()?.role;
+          router.push(role === 'partner' ? '/partner/dashboard' : getSafeRedirect() || '/dashboard');
         } else {
           setVerifyEmailAddr(email);
           setShowVerifyRequired(true);
@@ -152,7 +154,9 @@ function LoginForm() {
         router.push(
           user.role === 'Super Admin'
             ? '/admin/dashboard'
-            : getSafeRedirect() || '/dashboard'
+            : user.role === 'partner'
+              ? '/partner/dashboard'
+              : getSafeRedirect() || '/dashboard'
         );
       }
     } catch (err: any) {
@@ -186,7 +190,8 @@ function LoginForm() {
     try {
       const res = await api.post('/auth/otp-login', { phone, otp });
       setAuthToken(res.data.token || res.data.accessToken, res.data.user);
-      router.push('/dashboard');
+      const user = getAuthUser() || { role: 'User' };
+      router.push(user.role === 'Super Admin' ? '/admin/dashboard' : user.role === 'partner' ? '/partner/dashboard' : '/dashboard');
     } catch (err: any) {
       setError(err.message || 'OTP verification failed.');
     } finally {
